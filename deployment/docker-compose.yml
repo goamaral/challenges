@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: ../
+      dockerfile: ./build/Dockerfile
+    depends_on:
+      - postgres
+    volumes:
+      - ./:/home/user/app
+    ports:
+      - 3000:3000
+    # TODO: healthcheck:
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database_init.sql:/docker-entrypoint-initdb.d/database_init.sql
+    ports:
+      - 5432:5432
