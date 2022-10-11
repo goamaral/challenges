@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+docker run -v $PWD:/defs namely/protoc-all -f ./api/user.proto -l go -o ./api/gen
+sudo chown $USER:$USER -R api/gen
+mv ./api/gen/esl-challenge/userpb ./api/gen
+rm -R ./api/gen/esl-challenge

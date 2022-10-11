@@ -10,7 +10,12 @@ services:
       - ./:/home/user/app
     ports:
       - 3000:3000
-    # TODO: healthcheck:
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 
   postgres:
     image: postgres:14
