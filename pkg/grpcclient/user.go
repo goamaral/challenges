@@ -1,19 +1,20 @@
 package grpcclient
 
 import (
+	"esl-challenge/api/gen/userpb"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-type HealthServiceClient interface {
-	grpc_health_v1.HealthClient
+type UserServiceClient interface {
+	userpb.UserServiceClient
 }
 
-func NewHealthServiceClient(address string) (HealthServiceClient, error) {
+func NewUserServiceClient(address string) (UserServiceClient, error) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
-	return grpc_health_v1.NewHealthClient(conn), nil
+	return userpb.NewUserServiceClient(conn), nil
 }

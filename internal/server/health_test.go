@@ -11,63 +11,63 @@ import (
 )
 
 func TestIntegrationHealthService_Check(t *testing.T) {
-	lis, grpcServer := initServer(t)
+	lis, grpcServer := initServer(t, nil)
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 
 	// Initialize health client
-	healthCli, err := grpcclient.NewHealthClient(lis.Addr().String())
+	healthSvcCli, err := grpcclient.NewHealthServiceClient(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check serving server health
-	res, err := healthCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	res, err := healthSvcCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, res.Status)
 	}
 
 	// Check serving service health
-	res, err = healthCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
+	res, err = healthSvcCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
 	if assert.NoError(t, err) {
 		assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, res.Status)
 	}
 
 	// Check not serving service health
 	grpcServer.SetServingStatus(server.UserServiceName, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-	res, err = healthCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
+	res, err = healthSvcCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
 	if assert.NoError(t, err) {
 		assert.Equal(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING, res.Status)
 	}
 
 	// Check unknown service health
-	_, err = healthCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "UnknownService"})
+	_, err = healthSvcCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "UnknownService"})
 	assert.Error(t, err)
 	assert.Equal(t, grpc_health_v1.HealthCheckResponse_NOT_SERVING, res.Status)
 
 	// Server down
-	downHealthCli, err := grpcclient.NewHealthClient("")
+	downHealthSvcCli, err := grpcclient.NewHealthServiceClient("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err = downHealthCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	res, err = downHealthSvcCli.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, res)
 }
 
 func TestIntegrationHealthService_Watch(t *testing.T) {
-	lis, grpcServer := initServer(t)
+	lis, grpcServer := initServer(t, nil)
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 
 	// Initialize health client
-	healthCli, err := grpcclient.NewHealthClient(lis.Addr().String())
+	healthSvcCli, err := grpcclient.NewHealthServiceClient(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check server health
-	stream, err := healthCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	stream, err := healthSvcCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	if assert.NoError(t, err) {
 		res, err := stream.Recv()
 		if assert.NoError(t, err) {
@@ -76,7 +76,7 @@ func TestIntegrationHealthService_Watch(t *testing.T) {
 	}
 
 	// Check service health
-	stream, err = healthCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
+	stream, err = healthSvcCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
 	if assert.NoError(t, err) {
 		res, err := stream.Recv()
 		if assert.NoError(t, err) {
@@ -86,7 +86,7 @@ func TestIntegrationHealthService_Watch(t *testing.T) {
 
 	// Check not serving service health
 	grpcServer.SetServingStatus(server.UserServiceName, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
-	stream, err = healthCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
+	stream, err = healthSvcCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: server.UserServiceName})
 	if assert.NoError(t, err) {
 		res, err := stream.Recv()
 		if assert.NoError(t, err) {
@@ -95,7 +95,7 @@ func TestIntegrationHealthService_Watch(t *testing.T) {
 	}
 
 	// Check unknown service health
-	stream, err = healthCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "UnknownService"})
+	stream, err = healthSvcCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "UnknownService"})
 	if assert.NoError(t, err) {
 		res, err := stream.Recv()
 		if assert.NoError(t, err) {
@@ -104,11 +104,11 @@ func TestIntegrationHealthService_Watch(t *testing.T) {
 	}
 
 	// Server down
-	downHealthCli, err := grpcclient.NewHealthClient("")
+	downHealthSvcCli, err := grpcclient.NewHealthServiceClient("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream, err = downHealthCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	stream, err = downHealthSvcCli.Watch(context.Background(), &grpc_health_v1.HealthCheckRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, stream)
 }

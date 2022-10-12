@@ -2,8 +2,6 @@ FROM golang:1.19.2-alpine3.16 AS builder
 
 WORKDIR /build
 
-# RUN             apk add --no-cache git gcc musl-dev make
-
 COPY go.* ./
 RUN go mod download
 
@@ -21,6 +19,8 @@ RUN wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health
 USER user
 
 WORKDIR /home/user/app
+
+ENV ENV="production"
 
 COPY --from=builder /build/app /bin
 
