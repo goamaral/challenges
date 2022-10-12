@@ -46,3 +46,12 @@ func (this *RequestUpdateUser) Validate() error {
 func (this *ResponseUpdateUser) Validate() error {
 	return nil
 }
+func (this *RequestDeleteUser) Validate() error {
+	if this.Id == "" {
+		return github_com_mwitkow_go_proto_validators.FieldError("Id", fmt.Errorf(`value '%v' must not be an empty string`, this.Id))
+	}
+	return nil
+}
+func (this *ResponseDeleteUser) Validate() error {
+	return nil
+}

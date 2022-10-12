@@ -9,6 +9,7 @@ import "github.com/mwitkow/go-proto-validators/validator.proto";
 service UserService {
   rpc CreateUser(RequestCreateUser) returns (ResponseCreateUser);
   rpc UpdateUser(RequestUpdateUser) returns (ResponseUpdateUser);
+  rpc DeleteUser(RequestDeleteUser) returns (ResponseDeleteUser);
 }
 
 
@@ -36,3 +37,9 @@ message RequestUpdateUser {
   string country = 7;
 }
 message ResponseUpdateUser {}
+
+// DeleteUser
+message RequestDeleteUser {
+  string id = 1 [(validator.field) = {string_not_empty: true}];
+}
+message ResponseDeleteUser {}

@@ -147,3 +147,44 @@ func TestUserRepository_UpdateUser(t *testing.T) {
 		})
 	}
 }
+
+func TestUserRepository_DeleteUser(t *testing.T) {
+	db, testEnd := testInit(t)
+	defer testEnd()
+
+	type Test struct {
+		TestName string
+		Setup    func() string
+		Validate func(Test, error)
+	}
+	tests := []Test{
+		{
+			TestName: "Delete existing user",
+			Setup: func() string {
+				user := addUser(t, db, entity.User{}, "")
+				return user.Id
+			},
+			Validate: func(test Test, err error) {
+				assert.NoError(t, err)
+			},
+		},
+		{
+			TestName: "Delete non existing user",
+			Setup: func() string {
+				return ulid.Make().String()
+			},
+			Validate: func(test Test, err error) {
+				assert.NoError(t, err)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.TestName, func(t *testing.T) {
+			id := test.Setup()
+
+			r := repository.NewUserRepository(db)
+			err := r.DeleteUser(context.Background(), id)
+			test.Validate(test, err)
+		})
+	}
+}

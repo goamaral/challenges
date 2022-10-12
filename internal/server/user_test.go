@@ -77,7 +77,7 @@ func TestUserService_CreateUser(t *testing.T) {
 			},
 		},
 		{
-			TestName: "Failure - Invalid argument",
+			TestName: "Invalid argument",
 			Request:  &userpb.RequestCreateUser{},
 			Validate: func(test Test, res *userpb.ResponseCreateUser, err error) {
 				assertGrpcErrorCode(t, err, codes.InvalidArgument)
@@ -131,4 +131,48 @@ func TestUserService_UpdateUser(t *testing.T) {
 	defer cancel()
 	_, err := userSvcCli.UpdateUser(ctx, req)
 	assert.NoError(t, err)
+}
+
+func TestUserService_DeleteUser(t *testing.T) {
+	type Test struct {
+		TestName   string
+		Request    *userpb.RequestDeleteUser
+		DeleteUser bool
+		Validate   func(Test, error)
+	}
+	tests := []Test{
+		{
+			TestName: "Success",
+			Request: &userpb.RequestDeleteUser{
+				Id: ulid.Make().String(),
+			},
+			DeleteUser: true,
+			Validate: func(test Test, err error) {
+				assert.NoError(t, err)
+			},
+		},
+		{
+			TestName: "Invalid argument",
+			Request:  &userpb.RequestDeleteUser{},
+			Validate: func(test Test, err error) {
+				assertGrpcErrorCode(t, err, codes.InvalidArgument)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.TestName, func(t *testing.T) {
+			userRepository := mocks.NewUserRepository(t)
+			if test.DeleteUser {
+				userRepository.On("DeleteUser", mock.Anything, test.Request.Id).Return(nil)
+			}
+
+			userSvcCli, testEnd := testUserInit(t, userRepository)
+			defer testEnd()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_, err := userSvcCli.DeleteUser(ctx, test.Request)
+			test.Validate(test, err)
+		})
+	}
 }

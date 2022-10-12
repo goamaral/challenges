@@ -51,3 +51,12 @@ func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUp
 
 	return &userpb.ResponseUpdateUser{}, nil
 }
+
+func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDeleteUser) (*userpb.ResponseDeleteUser, error) {
+	err := s.userRepository.DeleteUser(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userpb.ResponseDeleteUser{}, nil
+}

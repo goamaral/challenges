@@ -35,6 +35,20 @@ func (_m *UserRepository) CreateUser(ctx context.Context, user entity.User, pass
 	return r0, r1
 }
 
+// DeleteUser provides a mock function with given fields: ctx, id
+func (_m *UserRepository) DeleteUser(ctx context.Context, id string) error {
+	ret := _m.Called(ctx, id)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // UpdateUser provides a mock function with given fields: ctx, id, userUpdates, passwordUpdate
 func (_m *UserRepository) UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error) {
 	ret := _m.Called(ctx, id, userUpdates, passwordUpdate)

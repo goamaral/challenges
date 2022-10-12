@@ -17,6 +17,7 @@ type userRepository struct {
 type UserRepository interface {
 	CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error)
 	UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error)
+	DeleteUser(ctx context.Context, id string) error
 }
 
 func NewUserRepository(db *gorm.DB) *userRepository {
@@ -52,10 +53,14 @@ func (r userRepository) UpdateUser(ctx context.Context, id string, userUpdates e
 	}
 
 	// Update user
-	err := r.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id = ?", id).Updates(&userUpdates).Error
+	err := r.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id", id).Updates(&userUpdates).Error
 	if err != nil {
 		return entity.User{}, err
 	}
 
 	return userUpdates, nil
+}
+
+func (r userRepository) DeleteUser(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id", id).Delete(&entity.User{}).Error
 }

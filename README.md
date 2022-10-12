@@ -9,7 +9,7 @@ TODO
 - [X] Health check
 - [X] Create user (TODO: return correct grpc status on duplicate keys)
 - [X] Update user
-- [ ] Delete user
+- [X] Delete user
 - [ ] List users
 - [ ] Publish user events (create, update, delete)
 
