@@ -8,7 +8,7 @@ TODO
 ## Features
 - [X] Health check
 - [X] Create user (TODO: return correct grpc status on duplicate keys)
-- [ ] Update user
+- [X] Update user
 - [ ] Delete user
 - [ ] List users
 - [ ] Publish user events (create, update, delete)
@@ -20,7 +20,7 @@ TODO
 - Validations: Used https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/validator
 
 # Improvements
-- Validations: Only basice validations were implemented but could be improved for fields like password, email, country.
+- Validations: Only basic validations were implemented but could be improved for fields like password, email, country.
 - Dependency injection: The project is simple, so dependencies can be passed in by argument. But in a bigger project we would want to use a dependency injection solution.
 - Safety: If only internal services communicate with this service there is no major problem. Otherwise, the connections should use TLS or mTLS. Wouldn't hurt also have this even communication is only internal.
 - Migrations: They were not used since there is only one table, but in a real project they should be. I would use something like https://github.com/pressly/goose to manage migrations.

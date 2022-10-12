@@ -3,6 +3,7 @@ package server
 import (
 	"esl-challenge/api/gen/userpb"
 	"esl-challenge/internal/repository"
+	"runtime/debug"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
@@ -29,6 +30,7 @@ func NewServer(userRepository repository.UserRepository) (*Server, error) {
 	recoveryOpts := []grpc_recovery.Option{
 		grpc_recovery.WithRecoveryHandler(func(p interface{}) error {
 			logrus.Error(p)
+			debug.PrintStack()
 			return status.Error(codes.Internal, "panic")
 		}),
 	}

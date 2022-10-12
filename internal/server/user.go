@@ -36,3 +36,18 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 
 	return &userpb.ResponseCreateUser{Id: user.Id}, nil
 }
+
+func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUpdateUser) (*userpb.ResponseUpdateUser, error) {
+	_, err := s.userRepository.UpdateUser(ctx, req.Id, entity.User{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Nickname:  req.Nickname,
+		Email:     req.Email,
+		Country:   req.Country,
+	}, req.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userpb.ResponseUpdateUser{}, nil
+}

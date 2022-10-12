@@ -8,7 +8,9 @@ import "github.com/mwitkow/go-proto-validators/validator.proto";
 
 service UserService {
   rpc CreateUser(RequestCreateUser) returns (ResponseCreateUser);
+  rpc UpdateUser(RequestUpdateUser) returns (ResponseUpdateUser);
 }
+
 
 // CreateUser
 message RequestCreateUser {
@@ -19,7 +21,18 @@ message RequestCreateUser {
   string email = 5 [(validator.field) = {string_not_empty: true}];
   string country = 6 [(validator.field) = {string_not_empty: true}];
 }
-
 message ResponseCreateUser {
   string id = 1;
 }
+
+// UpdateUser
+message RequestUpdateUser {
+  string id = 1; // Only used to find user
+  string first_name = 2;
+  string last_name = 3;
+  string nickname = 4;
+  string password = 5;
+  string email = 6;
+  string country = 7;
+}
+message ResponseUpdateUser {}

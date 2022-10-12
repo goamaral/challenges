@@ -14,20 +14,41 @@ type UserRepository struct {
 	mock.Mock
 }
 
-// CreateUser provides a mock function with given fields: ctx, user, rawPassword
-func (_m *UserRepository) CreateUser(ctx context.Context, user entity.User, rawPassword string) (entity.User, error) {
-	ret := _m.Called(ctx, user, rawPassword)
+// CreateUser provides a mock function with given fields: ctx, user, password
+func (_m *UserRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {
+	ret := _m.Called(ctx, user, password)
 
 	var r0 entity.User
 	if rf, ok := ret.Get(0).(func(context.Context, entity.User, string) entity.User); ok {
-		r0 = rf(ctx, user, rawPassword)
+		r0 = rf(ctx, user, password)
 	} else {
 		r0 = ret.Get(0).(entity.User)
 	}
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, entity.User, string) error); ok {
-		r1 = rf(ctx, user, rawPassword)
+		r1 = rf(ctx, user, password)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// UpdateUser provides a mock function with given fields: ctx, id, userUpdates, passwordUpdate
+func (_m *UserRepository) UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error) {
+	ret := _m.Called(ctx, id, userUpdates, passwordUpdate)
+
+	var r0 entity.User
+	if rf, ok := ret.Get(0).(func(context.Context, string, entity.User, string) entity.User); ok {
+		r0 = rf(ctx, id, userUpdates, passwordUpdate)
+	} else {
+		r0 = ret.Get(0).(entity.User)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, entity.User, string) error); ok {
+		r1 = rf(ctx, id, userUpdates, passwordUpdate)
 	} else {
 		r1 = ret.Error(1)
 	}

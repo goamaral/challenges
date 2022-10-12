@@ -4,58 +4,146 @@ import (
 	"context"
 	"esl-challenge/internal/entity"
 	"esl-challenge/internal/repository"
-	"esl-challenge/pkg/providers/postgres"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
-func TestUserRepository_CreateUser(t *testing.T) {
-	deploymentFolderPath, _ := filepath.Abs("../../deployment")
-	databaseInitSqlBytes, err := os.ReadFile(fmt.Sprintf("%s/database_init.sql", deploymentFolderPath))
+func addUser(t *testing.T, db *gorm.DB, user entity.User, password string) entity.User {
+	if password == "" {
+		user.SetPassword("password")
+	} else {
+		user.SetPassword(password)
+	}
+	if user.Id == "" {
+		user.Id = ulid.Make().String()
+	}
+	if user.Nickname == "" {
+		user.Nickname = ulid.Make().String()
+	}
+	if user.Email == "" {
+		user.Email = ulid.Make().String()
+	}
+
+	err := db.Create(&user).Error
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	provider, closeProvider := postgres.NewTestPostgresProvider(t, string(databaseInitSqlBytes))
-	defer closeProvider()
+	return user
+}
 
-	rawPassword := "password"
-	newUser := entity.User{}
+func TestUserRepository_CreateUser(t *testing.T) {
+	db, testEnd := testInit(t)
+	defer testEnd()
 
-	r := repository.NewUserRepository(provider)
+	existingUser := addUser(t, db, entity.User{}, "")
 
-	// Success
-	user, err := r.CreateUser(context.Background(), newUser, rawPassword)
-	if assert.NoError(t, err) {
-		assert.NotZero(t, user.Id)
-		assert.NotZero(t, user.CreatedAt)
-		assert.NotZero(t, user.UpdatedAt)
-		assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(rawPassword)))
+	type Test struct {
+		TestName string
+		User     entity.User
+		Password string
+		Validate func(Test, entity.User, error)
 	}
-
-	// Failure - Nickname not unique
-	_, err = r.CreateUser(context.Background(), newUser, rawPassword)
-	if assert.Error(t, err) {
-		pgErr, ok := err.(interface {
-			SQLState() string
-		})
-		assert.True(t, ok, "Not pg error")
-		assert.Equal(t, "23505", pgErr.SQLState()) // unique_violation
+	tests := []Test{
+		{
+			TestName: "Success",
+			User:     entity.User{},
+			Password: "password",
+			Validate: func(test Test, user entity.User, err error) {
+				if assert.NoError(t, err) {
+					assert.NotZero(t, user.Id)
+					assert.NotZero(t, user.CreatedAt)
+					assert.NotZero(t, user.UpdatedAt)
+					assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(test.Password)))
+				}
+			},
+		},
+		{
+			TestName: "Failure - Nickname not unique",
+			User:     entity.User{Nickname: existingUser.Nickname},
+			Validate: func(test Test, user entity.User, err error) {
+				assertUniqueViolationError(t, err)
+			},
+		},
+		{
+			TestName: "Failure - Email not unique",
+			User:     entity.User{Email: existingUser.Email},
+			Validate: func(test Test, user entity.User, err error) {
+				assertUniqueViolationError(t, err)
+			},
+		},
 	}
-
-	// Failure - Email not unique
-	newUser.Nickname = "another"
-	_, err = r.CreateUser(context.Background(), newUser, rawPassword)
-	if assert.Error(t, err) {
-		pgErr, ok := err.(interface {
-			SQLState() string
+	for _, test := range tests {
+		t.Run(test.TestName, func(t *testing.T) {
+			r := repository.NewUserRepository(db)
+			user, err := r.CreateUser(context.Background(), test.User, test.Password)
+			test.Validate(test, user, err)
 		})
-		assert.True(t, ok, "Not pg error")
-		assert.Equal(t, "23505", pgErr.SQLState()) // unique_violation
+	}
+}
+
+func TestUserRepository_UpdateUser(t *testing.T) {
+	db, testEnd := testInit(t)
+	defer testEnd()
+
+	existingUser := addUser(t, db, entity.User{}, "")
+
+	type Test struct {
+		TestName       string
+		User           entity.User
+		Password       string
+		UserUpdates    entity.User
+		PasswordUpdate string
+		Validate       func(Test, entity.User, error)
+	}
+	tests := []Test{
+		{
+			TestName:    "Success - Update single field (not password)",
+			User:        entity.User{FirstName: "John", LastName: "Doe"},
+			UserUpdates: entity.User{FirstName: "Joe"},
+			Validate: func(test Test, user entity.User, err error) {
+				if assert.NoError(t, err) {
+					assert.Equal(t, test.UserUpdates.FirstName, user.FirstName) // Updates
+					assert.Equal(t, test.User.LastName, user.LastName)          // Does not update
+				}
+			},
+		},
+		{
+			TestName:       "Success - Update password",
+			Password:       "password",
+			PasswordUpdate: "new_password",
+			Validate: func(test Test, user entity.User, err error) {
+				if assert.NoError(t, err) {
+					assert.NoError(t, bcrypt.CompareHashAndPassword(user.EncryptedPassword, []byte(test.PasswordUpdate)))
+				}
+			},
+		},
+		{
+			TestName:    "Failure - Nickname not unique",
+			UserUpdates: entity.User{Nickname: existingUser.Nickname},
+			Validate: func(test Test, user entity.User, err error) {
+				assertUniqueViolationError(t, err)
+			},
+		},
+		{
+			TestName:    "Failure - Email not unique",
+			UserUpdates: entity.User{Email: existingUser.Email},
+			Validate: func(test Test, user entity.User, err error) {
+				assertUniqueViolationError(t, err)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.TestName, func(t *testing.T) {
+			user := addUser(t, db, test.User, test.Password)
+
+			r := repository.NewUserRepository(db)
+			user, err := r.UpdateUser(context.Background(), user.Id, test.UserUpdates, test.PasswordUpdate)
+			test.Validate(test, user, err)
+		})
 	}
 }

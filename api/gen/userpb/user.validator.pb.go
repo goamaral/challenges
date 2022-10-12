@@ -40,3 +40,9 @@ func (this *RequestCreateUser) Validate() error {
 func (this *ResponseCreateUser) Validate() error {
 	return nil
 }
+func (this *RequestUpdateUser) Validate() error {
+	return nil
+}
+func (this *ResponseUpdateUser) Validate() error {
+	return nil
+}

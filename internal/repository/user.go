@@ -5,40 +5,57 @@ import (
 	"esl-challenge/internal/entity"
 
 	"github.com/oklog/ulid/v2"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
-
-const bcryptCost = 15
 
 type userRepository struct {
 	db *gorm.DB
 }
 
+/* PUBLIC */
 type UserRepository interface {
-	CreateUser(ctx context.Context, user entity.User, rawPassword string) (entity.User, error)
+	CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error)
+	UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error)
 }
 
-func NewUserRepository(provider *gorm.DB) *userRepository {
-	return &userRepository{db: provider}
+func NewUserRepository(db *gorm.DB) *userRepository {
+	return &userRepository{db: db}
 }
 
-func (r userRepository) CreateUser(ctx context.Context, user entity.User, rawPassword string) (entity.User, error) {
-	// Encrypt password
-	encryptedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcryptCost)
+func (r userRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {
+	// Set password
+	err := user.SetPassword(password)
 	if err != nil {
 		return entity.User{}, err
 	}
-	user.EncryptedPassword = encryptedPasswordBytes
 
 	// Generate id
 	user.Id = ulid.Make().String()
 
-	// Persist
+	// Create user
 	err = r.db.WithContext(ctx).Create(&user).Error
 	if err != nil {
 		return entity.User{}, err
 	}
 
 	return user, nil
+}
+
+func (r userRepository) UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error) {
+	if passwordUpdate != "" {
+		// Set password
+		err := userUpdates.SetPassword(passwordUpdate)
+		if err != nil {
+			return entity.User{}, err
+		}
+	}
+
+	// Update user
+	err := r.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id = ?", id).Updates(&userUpdates).Error
+	if err != nil {
+		return entity.User{}, err
+	}
+
+	return userUpdates, nil
 }
