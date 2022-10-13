@@ -188,3 +188,70 @@ func TestUserRepository_DeleteUser(t *testing.T) {
 		})
 	}
 }
+
+func TestUserRepository_ListUsers(t *testing.T) {
+	db, testEnd := testInit(t)
+	defer testEnd()
+
+	country := "country"
+
+	firstUser := addUser(t, db, entity.User{Country: country}, "")
+	secondUser := addUser(t, db, entity.User{}, "")
+
+	type Test struct {
+		TestName        string
+		PaginationToken string
+		Country         string
+		Validate        func(Test, []entity.User, error)
+	}
+	tests := []Test{
+		{
+			TestName: "Empty args", // Should return both users
+			Validate: func(test Test, users []entity.User, err error) {
+				if assert.NoError(t, err) && assert.Len(t, users, 2) {
+					assert.Equal(t, firstUser.Id, users[0].Id)
+					assert.Equal(t, secondUser.Id, users[1].Id)
+				}
+			},
+		},
+		{
+			TestName:        "With first user id as paginationToken", // Should only return the second user
+			PaginationToken: firstUser.Id,
+			Validate: func(test Test, users []entity.User, err error) {
+				if assert.NoError(t, err) && assert.Len(t, users, 1) {
+					assert.Equal(t, secondUser.Id, users[0].Id)
+				}
+			},
+		},
+		{
+			TestName:        "With second user id as paginationToken", // Should return no users
+			PaginationToken: secondUser.Id,
+			Validate: func(test Test, users []entity.User, err error) {
+				if assert.NoError(t, err) {
+					assert.Len(t, users, 0)
+				}
+			},
+		},
+		{
+			TestName: "With first user country as country", // Should only return the first user
+			Country:  firstUser.Country,
+			Validate: func(test Test, users []entity.User, err error) {
+				if assert.NoError(t, err) && assert.Len(t, users, 1) {
+					assert.Equal(t, firstUser.Id, users[0].Id)
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.TestName, func(t *testing.T) {
+			var opts *repository.ListUsersOpts
+			if test.Country != "" {
+				opts = &repository.ListUsersOpts{Country: test.Country}
+			}
+
+			r := repository.NewUserRepository(db)
+			users, err := r.ListUsers(context.Background(), test.PaginationToken, opts)
+			test.Validate(test, users, err)
+		})
+	}
+}

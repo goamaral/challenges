@@ -4,14 +4,26 @@ option go_package = "esl-challenge/userpb";
 
 package user_service;
 
+import "google/protobuf/timestamp.proto";
 import "github.com/mwitkow/go-proto-validators/validator.proto";
 
 service UserService {
   rpc CreateUser(RequestCreateUser) returns (ResponseCreateUser);
   rpc UpdateUser(RequestUpdateUser) returns (ResponseUpdateUser);
   rpc DeleteUser(RequestDeleteUser) returns (ResponseDeleteUser);
+  rpc ListUsers(RequestListUsers) returns (ResponseListUsers);
 }
 
+message User {
+  string id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string nickname = 4;
+  string email = 5;
+  string country = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
 
 // CreateUser
 message RequestCreateUser {
@@ -43,3 +55,12 @@ message RequestDeleteUser {
   string id = 1 [(validator.field) = {string_not_empty: true}];
 }
 message ResponseDeleteUser {}
+
+// ListUsers
+message RequestListUsers {
+  string pagiantion_token = 1;
+  string country = 2;
+}
+message ResponseListUsers {
+  repeated User users = 1;
+}

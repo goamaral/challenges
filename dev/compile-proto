@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-rm -R ./api/gen
+rm -Rf ./api/gen
 mkdir ./api/gen
 docker run -v $PWD/api:/defs namely/protoc-all -f ./user.proto -l go -o ./gen --go-proto-validator
 sudo chown $USER:$USER -R api/gen/esl-challenge

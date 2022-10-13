@@ -176,3 +176,26 @@ func TestUserService_DeleteUser(t *testing.T) {
 		})
 	}
 }
+
+func TestUserService_ListUsers(t *testing.T) {
+	paginationToken := "paginationToken"
+	country := "country"
+	user := entity.User{Country: country}
+
+	userRepository := mocks.NewUserRepository(t)
+	userRepository.On("ListUsers", mock.Anything, paginationToken, mock.Anything).
+		Return(func(_ context.Context, _ string, opts *repository.ListUsersOpts) []entity.User {
+			assert.Equal(t, country, opts.Country)
+			return []entity.User{{Country: country}}
+		}, nil)
+
+	userSvcCli, testEnd := testUserInit(t, userRepository)
+	defer testEnd()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	res, err := userSvcCli.ListUsers(ctx, &userpb.RequestListUsers{PagiantionToken: paginationToken, Country: country})
+	if assert.NoError(t, err) && assert.Len(t, res.Users, 1) {
+		assertUser(t, res.Users[0], user)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"esl-challenge/api/gen/userpb"
 	"esl-challenge/internal/entity"
+	"esl-challenge/internal/protobuf"
 	"esl-challenge/internal/repository"
 )
 
@@ -59,4 +60,15 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 	}
 
 	return &userpb.ResponseDeleteUser{}, nil
+}
+
+func (s userServiceServer) ListUsers(ctx context.Context, req *userpb.RequestListUsers) (*userpb.ResponseListUsers, error) {
+	users, err := s.userRepository.ListUsers(ctx, req.PagiantionToken, &repository.ListUsersOpts{
+		Country: req.Country,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &userpb.ResponseListUsers{Users: protobuf.EntitiesToProtobuf(users, protobuf.UserToProtobuf)}, nil
 }

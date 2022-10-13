@@ -10,16 +10,18 @@ TODO
 - [X] Create user (TODO: return correct grpc status on duplicate keys)
 - [X] Update user
 - [X] Delete user
-- [ ] List users
+- [X] List users
 - [ ] Publish user events (create, update, delete)
 
 ## Decisions
 - HealthCheck: Used https://github.com/grpc/grpc/blob/master/doc/health-checking.md
-- ULID: Used https://github.com/oklog/ulid. ULIds are lexicographically sortable. This is helpful to avoid using OFFSET+LIMIT in pagination, for performance and consistency reasons.
+- ULID: Used https://github.com/oklog/ulid. ULIds are lexicographically sortable. This is helpful for performance and consistency reasons (the database can index id more easily).
 - ORM: Used https://github.com/go-gorm/gorm
 - Validations: Used https://github.com/grpc-ecosystem/go-grpc-middleware/tree/master/validator
 
 # Improvements
+- Pagination: We could have added a PerPage field in the request and a TotalCount in the response
+- Soft Deletion: This can be easily achieved with a deleted_at column
 - Validations: Only basic validations were implemented but could be improved for fields like password, email, country.
 - Dependency injection: The project is simple, so dependencies can be passed in by argument. But in a bigger project we would want to use a dependency injection solution.
 - Safety: If only internal services communicate with this service there is no major problem. Otherwise, the connections should use TLS or mTLS. Wouldn't hurt also have this even communication is only internal.
