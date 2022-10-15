@@ -51,13 +51,13 @@ func (_m *UserRepository) DeleteUser(ctx context.Context, id string) error {
 	return r0
 }
 
-// ListUsers provides a mock function with given fields: ctx, paginationToken, opts
-func (_m *UserRepository) ListUsers(ctx context.Context, paginationToken string, opts *repository.ListUsersOpts) ([]entity.User, error) {
-	ret := _m.Called(ctx, paginationToken, opts)
+// ListUsers provides a mock function with given fields: ctx, paginationToken, pageSize, opts
+func (_m *UserRepository) ListUsers(ctx context.Context, paginationToken string, pageSize uint, opts *repository.ListUsersOpts) ([]entity.User, error) {
+	ret := _m.Called(ctx, paginationToken, pageSize, opts)
 
 	var r0 []entity.User
-	if rf, ok := ret.Get(0).(func(context.Context, string, *repository.ListUsersOpts) []entity.User); ok {
-		r0 = rf(ctx, paginationToken, opts)
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint, *repository.ListUsersOpts) []entity.User); ok {
+		r0 = rf(ctx, paginationToken, pageSize, opts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]entity.User)
@@ -65,13 +65,27 @@ func (_m *UserRepository) ListUsers(ctx context.Context, paginationToken string,
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, string, *repository.ListUsersOpts) error); ok {
-		r1 = rf(ctx, paginationToken, opts)
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint, *repository.ListUsersOpts) error); ok {
+		r1 = rf(ctx, paginationToken, pageSize, opts)
 	} else {
 		r1 = ret.Error(1)
 	}
 
 	return r0, r1
+}
+
+// RunInTransaction provides a mock function with given fields: ctx, fn
+func (_m *UserRepository) RunInTransaction(ctx context.Context, fn func(context.Context) error) error {
+	ret := _m.Called(ctx, fn)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, func(context.Context) error) error); ok {
+		r0 = rf(ctx, fn)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
 
 // UpdateUser provides a mock function with given fields: ctx, id, userUpdates, passwordUpdate

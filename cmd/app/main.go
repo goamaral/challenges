@@ -3,8 +3,10 @@ package main
 import (
 	"esl-challenge/internal/repository"
 	"esl-challenge/internal/server"
+	"esl-challenge/internal/service"
 	"esl-challenge/pkg/env"
 	"esl-challenge/pkg/providers/postgres"
+	"esl-challenge/pkg/providers/rabbitmq"
 	"fmt"
 	"net"
 
@@ -26,12 +28,26 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize postgres provider")
 	}
+	rabbitmqProvider, err := rabbitmq.NewRabbitmqProvider()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize rabbitmq provider")
+	}
+	defer rabbitmqProvider.Close()
+
+	// Declare rabbitmq exchange
+	err = rabbitmqProvider.ExchangeDeclare(service.RabbitmqChangesTopic, "topic", true, false, false, false, nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to declare rabbitmq changes exchange")
+	}
 
 	// Repositories
-	userRepository := repository.NewUserRepository(postgresProvider)
+	userRepo := repository.NewUserRepository(postgresProvider)
+
+	// Services
+	rabbitmqSvc := service.NewRabbitmqService(rabbitmqProvider)
 
 	// Server
-	grpcServer, err := server.NewServer(userRepository)
+	grpcServer, err := server.NewServer(userRepo, rabbitmqSvc)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize grpc server")
 		return

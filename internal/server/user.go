@@ -6,31 +6,49 @@ import (
 	"esl-challenge/internal/entity"
 	"esl-challenge/internal/protobuf"
 	"esl-challenge/internal/repository"
+	"esl-challenge/internal/service"
 )
 
 const UserServiceName = "UserService"
 
 type userServiceServer struct {
 	userpb.UnimplementedUserServiceServer
-	userRepository repository.UserRepository
+	userRepo    repository.UserRepository
+	rabbitmqSvc service.RabbitmqService
 }
 
 type UserServiceServer struct {
 	userpb.UserServiceServer
 }
 
-func NewUserServiceServer(userRepository repository.UserRepository) *userServiceServer {
-	return &userServiceServer{userRepository: userRepository}
+func NewUserServiceServer(userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) *userServiceServer {
+	return &userServiceServer{userRepo: userRepo, rabbitmqSvc: rabbitmqSvc}
 }
 
 func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCreateUser) (*userpb.ResponseCreateUser, error) {
-	user, err := s.userRepository.CreateUser(ctx, entity.User{
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Nickname:  req.Nickname,
-		Email:     req.Email,
-		Country:   req.Country,
-	}, req.Password)
+	var user entity.User
+	var err error
+	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		// Create user
+		user, err = s.userRepo.CreateUser(txCtx, entity.User{
+			FirstName: req.FirstName,
+			LastName:  req.LastName,
+			Nickname:  req.Nickname,
+			Email:     req.Email,
+			Country:   req.Country,
+		}, req.Password)
+		if err != nil {
+			return err
+		}
+
+		// Publish user changes
+		err = s.rabbitmqSvc.PublishChanges(txCtx, user, service.EntityType_USER, service.Action_CREATE)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +57,28 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 }
 
 func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUpdateUser) (*userpb.ResponseUpdateUser, error) {
-	_, err := s.userRepository.UpdateUser(ctx, req.Id, entity.User{
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Nickname:  req.Nickname,
-		Email:     req.Email,
-		Country:   req.Country,
-	}, req.Password)
+	var user entity.User
+	var err error
+	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		user, err = s.userRepo.UpdateUser(ctx, req.Id, entity.User{
+			FirstName: req.FirstName,
+			LastName:  req.LastName,
+			Nickname:  req.Nickname,
+			Email:     req.Email,
+			Country:   req.Country,
+		}, req.Password)
+		if err != nil {
+			return err
+		}
+
+		// Publish user changes
+		err = s.rabbitmqSvc.PublishChanges(txCtx, user, service.EntityType_USER, service.Action_UPDATE)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +87,22 @@ func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUp
 }
 
 func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDeleteUser) (*userpb.ResponseDeleteUser, error) {
-	err := s.userRepository.DeleteUser(ctx, req.Id)
+	var err error
+	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		// Delete user
+		err := s.userRepo.DeleteUser(ctx, req.Id)
+		if err != nil {
+			return err
+		}
+
+		// Publish user changes
+		err = s.rabbitmqSvc.PublishChanges(txCtx, req.Id, service.EntityType_USER, service.Action_DELETE)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +111,7 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 }
 
 func (s userServiceServer) ListUsers(ctx context.Context, req *userpb.RequestListUsers) (*userpb.ResponseListUsers, error) {
-	users, err := s.userRepository.ListUsers(ctx, req.PagiantionToken, &repository.ListUsersOpts{
+	users, err := s.userRepo.ListUsers(ctx, req.PaginationToken, uint(req.PageSize), &repository.ListUsersOpts{
 		Country: req.Country,
 	})
 	if err != nil {

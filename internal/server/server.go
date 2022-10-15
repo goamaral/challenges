@@ -3,6 +3,7 @@ package server
 import (
 	"esl-challenge/api/gen/userpb"
 	"esl-challenge/internal/repository"
+	"esl-challenge/internal/service"
 	"runtime/debug"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -26,7 +27,7 @@ type Server struct {
 	healthServer *health.Server
 }
 
-func NewServer(userRepository repository.UserRepository) (*Server, error) {
+func NewServer(userRepository repository.UserRepository, rabbitmqSvc service.RabbitmqService) (*Server, error) {
 	recoveryOpts := []grpc_recovery.Option{
 		grpc_recovery.WithRecoveryHandler(func(p interface{}) error {
 			logrus.Error(p)
@@ -51,7 +52,7 @@ func NewServer(userRepository repository.UserRepository) (*Server, error) {
 	)
 
 	// Server services
-	userpb.RegisterUserServiceServer(grpcServer, NewUserServiceServer(userRepository))
+	userpb.RegisterUserServiceServer(grpcServer, NewUserServiceServer(userRepository, rabbitmqSvc))
 
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus(UserServiceName, grpc_health_v1.HealthCheckResponse_SERVING)

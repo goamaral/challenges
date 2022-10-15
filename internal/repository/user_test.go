@@ -201,6 +201,7 @@ func TestUserRepository_ListUsers(t *testing.T) {
 	type Test struct {
 		TestName        string
 		PaginationToken string
+		PageSize        uint
 		Country         string
 		Validate        func(Test, []entity.User, error)
 	}
@@ -241,6 +242,15 @@ func TestUserRepository_ListUsers(t *testing.T) {
 				}
 			},
 		},
+		{
+			TestName: "With pageSize set to 1", // Should only return the first user
+			PageSize: 1,
+			Validate: func(test Test, users []entity.User, err error) {
+				if assert.NoError(t, err) && assert.Len(t, users, 1) {
+					assert.Equal(t, firstUser.Id, users[0].Id)
+				}
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
@@ -250,7 +260,7 @@ func TestUserRepository_ListUsers(t *testing.T) {
 			}
 
 			r := repository.NewUserRepository(db)
-			users, err := r.ListUsers(context.Background(), test.PaginationToken, opts)
+			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, opts)
 			test.Validate(test, users, err)
 		})
 	}

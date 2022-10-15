@@ -10,19 +10,20 @@ import (
 )
 
 type userRepository struct {
-	db *gorm.DB
+	abstractRepository
 }
 
 /* PUBLIC */
 type UserRepository interface {
+	AbstractRepository
 	CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error)
 	UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error)
 	DeleteUser(ctx context.Context, id string) error
-	ListUsers(ctx context.Context, paginationToken string, opts *ListUsersOpts) ([]entity.User, error)
+	ListUsers(ctx context.Context, paginationToken string, pageSize uint, opts *ListUsersOpts) ([]entity.User, error)
 }
 
 func NewUserRepository(db *gorm.DB) *userRepository {
-	return &userRepository{db: db}
+	return &userRepository{abstractRepository: abstractRepository{db}}
 }
 
 func (r userRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {
@@ -36,7 +37,7 @@ func (r userRepository) CreateUser(ctx context.Context, user entity.User, passwo
 	user.Id = ulid.Make().String()
 
 	// Create user
-	err = r.db.WithContext(ctx).Create(&user).Error
+	err = r.newQuery(ctx).Create(&user).Error
 	if err != nil {
 		return entity.User{}, err
 	}
@@ -54,7 +55,7 @@ func (r userRepository) UpdateUser(ctx context.Context, id string, userUpdates e
 	}
 
 	// Update user
-	err := r.db.WithContext(ctx).Clauses(clause.Returning{}).Where("id", id).Updates(&userUpdates).Error
+	err := r.newQuery(ctx).Clauses(clause.Returning{}).Where("id", id).Updates(&userUpdates).Error
 	if err != nil {
 		return entity.User{}, err
 	}
@@ -63,7 +64,7 @@ func (r userRepository) UpdateUser(ctx context.Context, id string, userUpdates e
 }
 
 func (r userRepository) DeleteUser(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Where("id", id).Delete(&entity.User{}).Error
+	return r.newQuery(ctx).Where("id", id).Delete(&entity.User{}).Error
 }
 
 type ListUsersOpts struct {
@@ -80,10 +81,14 @@ func (opts *ListUsersOpts) Apply(qry *gorm.DB) *gorm.DB {
 	return qry
 }
 
-func (r userRepository) ListUsers(ctx context.Context, paginationToken string, opts *ListUsersOpts) ([]entity.User, error) {
+func (r userRepository) ListUsers(ctx context.Context, paginationToken string, pageSize uint, opts *ListUsersOpts) ([]entity.User, error) {
 	var users []entity.User
 
-	qry := r.db.WithContext(ctx).Where("id > ?", paginationToken)
+	if pageSize == 0 {
+		pageSize = 10
+	}
+
+	qry := r.newQuery(ctx).Where("id > ?", paginationToken).Limit(int(pageSize))
 	err := opts.Apply(qry).Find(&users).Error
 	if err != nil {
 		return nil, err

@@ -58,8 +58,9 @@ message ResponseDeleteUser {}
 
 // ListUsers
 message RequestListUsers {
-  string pagiantion_token = 1;
-  string country = 2;
+  string pagination_token = 1;
+  uint32 page_size = 2;
+  string country = 3;
 }
 message ResponseListUsers {
   repeated User users = 1;

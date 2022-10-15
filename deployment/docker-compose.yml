@@ -6,6 +6,10 @@ services:
       dockerfile: ./build/Dockerfile
     depends_on:
       - postgres
+      - rabbitmq
+    environment:
+      POSTGRES_HOST: postgres
+      RABBIT_MQ_URL: amqp://rabbitmq:5672
     volumes:
       - ./:/home/user/app
     ports:
@@ -15,7 +19,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
 
   postgres:
     image: postgres:14
@@ -30,8 +33,16 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4
+    depends_on:
+      - postgres
     environment:
       PGADMIN_DEFAULT_EMAIL: postgres@email.com
       PGADMIN_DEFAULT_PASSWORD: postgres
     ports:
       - 5000:80
+
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - 5672:5672
+      - 15672:15672

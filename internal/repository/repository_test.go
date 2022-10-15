@@ -18,7 +18,7 @@ func testInit(t *testing.T) (*gorm.DB, func()) {
 		t.Fatal(err)
 	}
 
-	return postgres.NewTestPostgresProvider(t, string(databaseInitSqlBytes))
+	return postgres.NewTestPostgresProvider(t, string(databaseInitSqlBytes), true)
 }
 
 func assertUniqueViolationError(t *testing.T, err error) {

@@ -5,6 +5,7 @@ import (
 	"esl-challenge/api/gen/userpb"
 	"esl-challenge/internal/entity"
 	"esl-challenge/internal/repository"
+	"esl-challenge/internal/service"
 	"esl-challenge/mocks"
 	"esl-challenge/pkg/grpcclient"
 	"testing"
@@ -16,8 +17,8 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-func testUserInit(t *testing.T, userRepository repository.UserRepository) (grpcclient.UserServiceClient, func()) {
-	lis, grpcServer := initServer(t, userRepository)
+func testUserInit(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) (grpcclient.UserServiceClient, func()) {
+	lis, grpcServer := initServer(t, userRepo, rabbitmqSvc)
 	go grpcServer.Serve(lis)
 
 	testEnd := func() {
@@ -86,16 +87,21 @@ func TestUserService_CreateUser(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
-			userRepository := mocks.NewUserRepository(t)
+			createdUser := entity.User{Id: test.ExpectedId}
+
+			userRepo := mocks.NewUserRepository(t)
+			rabbitmqSvc := mocks.NewRabbitmqService(t)
 			if test.CreateUser {
-				userRepository.On("CreateUser", mock.Anything, mock.Anything, test.Request.Password).
+				userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
+				userRepo.On("CreateUser", mock.Anything, mock.Anything, test.Request.Password).
 					Return(func(_ context.Context, user entity.User, _ string) entity.User {
 						assertUser(t, test.Request, user)
-						return entity.User{Id: test.ExpectedId}
+						return createdUser
 					}, nil)
+				rabbitmqSvc.On("PublishChanges", mock.Anything, createdUser, service.EntityType_USER, service.Action_CREATE).Return(nil)
 			}
 
-			userSvcCli, testEnd := testUserInit(t, userRepository)
+			userSvcCli, testEnd := testUserInit(t, userRepo, rabbitmqSvc)
 			defer testEnd()
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -117,14 +123,19 @@ func TestUserService_UpdateUser(t *testing.T) {
 		Country:   "Germany",
 	}
 
-	userRepository := mocks.NewUserRepository(t)
-	userRepository.On("UpdateUser", mock.Anything, req.Id, mock.Anything, req.Password).
+	updatedUser := entity.User{}
+
+	userRepo := mocks.NewUserRepository(t)
+	rabbitmqSvc := mocks.NewRabbitmqService(t)
+	userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
+	userRepo.On("UpdateUser", mock.Anything, req.Id, mock.Anything, req.Password).
 		Return(func(_ context.Context, _ string, user entity.User, _ string) entity.User {
 			assertUser(t, req, user)
-			return entity.User{}
+			return updatedUser
 		}, nil)
+	rabbitmqSvc.On("PublishChanges", mock.Anything, updatedUser, service.EntityType_USER, service.Action_UPDATE).Return(nil)
 
-	userSvcCli, testEnd := testUserInit(t, userRepository)
+	userSvcCli, testEnd := testUserInit(t, userRepo, rabbitmqSvc)
 	defer testEnd()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -161,12 +172,15 @@ func TestUserService_DeleteUser(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
-			userRepository := mocks.NewUserRepository(t)
+			userRepo := mocks.NewUserRepository(t)
+			rabbitmqSvc := mocks.NewRabbitmqService(t)
 			if test.DeleteUser {
-				userRepository.On("DeleteUser", mock.Anything, test.Request.Id).Return(nil)
+				userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
+				userRepo.On("DeleteUser", mock.Anything, test.Request.Id).Return(nil)
+				rabbitmqSvc.On("PublishChanges", mock.Anything, test.Request.Id, service.EntityType_USER, service.Action_DELETE).Return(nil)
 			}
 
-			userSvcCli, testEnd := testUserInit(t, userRepository)
+			userSvcCli, testEnd := testUserInit(t, userRepo, rabbitmqSvc)
 			defer testEnd()
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -179,22 +193,23 @@ func TestUserService_DeleteUser(t *testing.T) {
 
 func TestUserService_ListUsers(t *testing.T) {
 	paginationToken := "paginationToken"
+	var pageSize uint = 5
 	country := "country"
 	user := entity.User{Country: country}
 
-	userRepository := mocks.NewUserRepository(t)
-	userRepository.On("ListUsers", mock.Anything, paginationToken, mock.Anything).
-		Return(func(_ context.Context, _ string, opts *repository.ListUsersOpts) []entity.User {
+	userRepo := mocks.NewUserRepository(t)
+	userRepo.On("ListUsers", mock.Anything, paginationToken, pageSize, mock.Anything).
+		Return(func(_ context.Context, _ string, _ uint, opts *repository.ListUsersOpts) []entity.User {
 			assert.Equal(t, country, opts.Country)
 			return []entity.User{{Country: country}}
 		}, nil)
 
-	userSvcCli, testEnd := testUserInit(t, userRepository)
+	userSvcCli, testEnd := testUserInit(t, userRepo, nil)
 	defer testEnd()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	res, err := userSvcCli.ListUsers(ctx, &userpb.RequestListUsers{PagiantionToken: paginationToken, Country: country})
+	res, err := userSvcCli.ListUsers(ctx, &userpb.RequestListUsers{PaginationToken: paginationToken, PageSize: uint32(pageSize), Country: country})
 	if assert.NoError(t, err) && assert.Len(t, res.Users, 1) {
 		assertUser(t, res.Users[0], user)
 	}

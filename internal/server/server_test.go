@@ -1,18 +1,21 @@
 package server_test
 
 import (
+	"context"
 	"esl-challenge/internal/repository"
 	"esl-challenge/internal/server"
+	"esl-challenge/internal/service"
 	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func initServer(t *testing.T, userRepository repository.UserRepository) (net.Listener, *server.Server) {
-	grpcServer, err := server.NewServer(userRepository)
+func initServer(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) (net.Listener, *server.Server) {
+	grpcServer, err := server.NewServer(userRepo, rabbitmqSvc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,4 +34,13 @@ func assertGrpcErrorCode(t *testing.T, err error, c codes.Code) {
 		assert.True(t, ok, "Not grpc error")
 		assert.Equal(t, c, grpcErr.GRPCStatus().Code())
 	}
+}
+
+func defineRunInTransactionStub(m mock.Mock) mock.Mock {
+	m.On("RunInTransaction", mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		})
+
+	return m
 }
