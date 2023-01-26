@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+rm -Rf ./api/gen
+mkdir ./api/gen
+docker run -v $PWD/api:/defs namely/protoc-all -f ./user.proto -l go -o ./gen --go-proto-validator
+sudo chown $USER:$USER -R api/gen/challenge
+mv ./api/gen/challenge/userpb ./api/gen
+rm -R ./api/gen/challenge
