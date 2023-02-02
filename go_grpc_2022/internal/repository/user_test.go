@@ -3,6 +3,7 @@ package repository_test
 import (
 	"challenge/internal/entity"
 	"challenge/internal/repository"
+	"challenge/pkg/gormprovider"
 	"context"
 	"testing"
 
@@ -21,12 +22,6 @@ func addUser(t *testing.T, db *gorm.DB, user entity.User, password string) entit
 	if user.Id == "" {
 		user.Id = ulid.Make().String()
 	}
-	if user.Nickname == "" {
-		user.Nickname = ulid.Make().String()
-	}
-	if user.Email == "" {
-		user.Email = ulid.Make().String()
-	}
 
 	err := db.Create(&user).Error
 	if err != nil {
@@ -37,10 +32,8 @@ func addUser(t *testing.T, db *gorm.DB, user entity.User, password string) entit
 }
 
 func TestUserRepository_CreateUser(t *testing.T) {
-	db, testEnd := testInit(t)
-	defer testEnd()
-
-	existingUser := addUser(t, db, entity.User{}, "")
+	nickname := "nickname"
+	email := "user@email.com"
 
 	type Test struct {
 		TestName string
@@ -64,21 +57,30 @@ func TestUserRepository_CreateUser(t *testing.T) {
 		},
 		{
 			TestName: "Failure - Nickname not unique",
-			User:     entity.User{Nickname: existingUser.Nickname},
+			User:     entity.User{Nickname: nickname},
 			Validate: func(test Test, user entity.User, err error) {
-				assertUniqueViolationError(t, err)
+				if assert.Error(t, err) {
+					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+				}
 			},
 		},
 		{
 			TestName: "Failure - Email not unique",
-			User:     entity.User{Email: existingUser.Email},
+			User:     entity.User{Email: email},
 			Validate: func(test Test, user entity.User, err error) {
-				assertUniqueViolationError(t, err)
+				if assert.Error(t, err) {
+					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+				}
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
+			db, testEnd := testInit(t)
+			defer testEnd()
+
+			addUser(t, db, entity.User{Nickname: nickname, Email: email}, "")
+
 			r := repository.NewUserRepository(db)
 			user, err := r.CreateUser(context.Background(), test.User, test.Password)
 			test.Validate(test, user, err)
@@ -87,10 +89,8 @@ func TestUserRepository_CreateUser(t *testing.T) {
 }
 
 func TestUserRepository_UpdateUser(t *testing.T) {
-	db, testEnd := testInit(t)
-	defer testEnd()
-
-	existingUser := addUser(t, db, entity.User{}, "")
+	nickname := "nickname"
+	email := "user@email.com"
 
 	type Test struct {
 		TestName       string
@@ -124,21 +124,29 @@ func TestUserRepository_UpdateUser(t *testing.T) {
 		},
 		{
 			TestName:    "Failure - Nickname not unique",
-			UserUpdates: entity.User{Nickname: existingUser.Nickname},
+			UserUpdates: entity.User{Nickname: nickname},
 			Validate: func(test Test, user entity.User, err error) {
-				assertUniqueViolationError(t, err)
+				if assert.Error(t, err) {
+					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+				}
 			},
 		},
 		{
 			TestName:    "Failure - Email not unique",
-			UserUpdates: entity.User{Email: existingUser.Email},
+			UserUpdates: entity.User{Email: email},
 			Validate: func(test Test, user entity.User, err error) {
-				assertUniqueViolationError(t, err)
+				if assert.Error(t, err) {
+					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+				}
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
+			db, testEnd := testInit(t)
+			defer testEnd()
+
+			addUser(t, db, entity.User{Nickname: nickname, Email: email}, "")
 			user := addUser(t, db, test.User, test.Password)
 
 			r := repository.NewUserRepository(db)
@@ -190,13 +198,9 @@ func TestUserRepository_DeleteUser(t *testing.T) {
 }
 
 func TestUserRepository_ListUsers(t *testing.T) {
-	db, testEnd := testInit(t)
-	defer testEnd()
-
 	country := "country"
-
-	firstUser := addUser(t, db, entity.User{Country: country}, "")
-	secondUser := addUser(t, db, entity.User{}, "")
+	firstUserId := ulid.Make().String()
+	secondUserId := ulid.Make().String()
 
 	type Test struct {
 		TestName        string
@@ -210,23 +214,23 @@ func TestUserRepository_ListUsers(t *testing.T) {
 			TestName: "Empty args", // Should return both users
 			Validate: func(test Test, users []entity.User, err error) {
 				if assert.NoError(t, err) && assert.Len(t, users, 2) {
-					assert.Equal(t, firstUser.Id, users[0].Id)
-					assert.Equal(t, secondUser.Id, users[1].Id)
+					assert.Equal(t, firstUserId, users[0].Id)
+					assert.Equal(t, secondUserId, users[1].Id)
 				}
 			},
 		},
 		{
 			TestName:        "With first user id as paginationToken", // Should only return the second user
-			PaginationToken: firstUser.Id,
+			PaginationToken: firstUserId,
 			Validate: func(test Test, users []entity.User, err error) {
 				if assert.NoError(t, err) && assert.Len(t, users, 1) {
-					assert.Equal(t, secondUser.Id, users[0].Id)
+					assert.Equal(t, secondUserId, users[0].Id)
 				}
 			},
 		},
 		{
 			TestName:        "With second user id as paginationToken", // Should return no users
-			PaginationToken: secondUser.Id,
+			PaginationToken: secondUserId,
 			Validate: func(test Test, users []entity.User, err error) {
 				if assert.NoError(t, err) {
 					assert.Len(t, users, 0)
@@ -235,10 +239,10 @@ func TestUserRepository_ListUsers(t *testing.T) {
 		},
 		{
 			TestName: "With first user country as country", // Should only return the first user
-			Country:  firstUser.Country,
+			Country:  country,
 			Validate: func(test Test, users []entity.User, err error) {
 				if assert.NoError(t, err) && assert.Len(t, users, 1) {
-					assert.Equal(t, firstUser.Id, users[0].Id)
+					assert.Equal(t, firstUserId, users[0].Id)
 				}
 			},
 		},
@@ -247,7 +251,7 @@ func TestUserRepository_ListUsers(t *testing.T) {
 			PageSize: 1,
 			Validate: func(test Test, users []entity.User, err error) {
 				if assert.NoError(t, err) && assert.Len(t, users, 1) {
-					assert.Equal(t, firstUser.Id, users[0].Id)
+					assert.Equal(t, firstUserId, users[0].Id)
 				}
 			},
 		},
@@ -258,6 +262,12 @@ func TestUserRepository_ListUsers(t *testing.T) {
 			if test.Country != "" {
 				opts = &repository.ListUsersOpts{Country: test.Country}
 			}
+
+			db, testEnd := testInit(t)
+			defer testEnd()
+
+			addUser(t, db, entity.User{Id: firstUserId, Nickname: "nickname1", Email: "email1", Country: country}, "")
+			addUser(t, db, entity.User{Id: secondUserId, Nickname: "nickname2", Email: "email2"}, "")
 
 			r := repository.NewUserRepository(db)
 			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, opts)

@@ -1,4 +1,4 @@
-package repository
+package gormprovider
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 const contextTransactionKey = "tx"
 
 type AbstractRepository interface {
+	NewQuery(ctx context.Context) *gorm.DB
 	RunInTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
 }
 
@@ -16,7 +17,11 @@ type abstractRepository struct {
 	db *gorm.DB
 }
 
-func (r abstractRepository) newQuery(ctx context.Context) *gorm.DB {
+func NewAbstractRepository(db *gorm.DB) AbstractRepository {
+	return abstractRepository{db}
+}
+
+func (r abstractRepository) NewQuery(ctx context.Context) *gorm.DB {
 	db, ok := ctx.Value(contextTransactionKey).(*gorm.DB)
 	if !ok || db == nil {
 		return r.db.WithContext(ctx)

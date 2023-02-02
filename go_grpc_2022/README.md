@@ -4,7 +4,6 @@ In this challenge I was asked to build a simple users CRUD api using GRPC and Go
 I should also notify user events (create, update, delete).
 
 ## Improvements
-- Return correct grpc status on duplicate keys
 - Prevent internal errors from bubbling to the user response
 - Pagination: We could have added a TotalCount in the response
 - Validations: Only basic validations were implemented but could be improved for fields like password, email, country.

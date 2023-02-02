@@ -1,17 +1,18 @@
 package main
 
 import (
-	"challenge/internal/repository"
-	"challenge/internal/server"
-	"challenge/internal/service"
-	"challenge/pkg/env"
-	"challenge/pkg/providers/postgres"
-	"challenge/pkg/providers/rabbitmq"
 	"fmt"
 	"net"
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
+
+	"challenge/internal/repository"
+	"challenge/internal/server"
+	"challenge/internal/service"
+	"challenge/pkg/env"
+	"challenge/pkg/gormprovider"
+	"challenge/pkg/rabbitmqprovider"
 )
 
 func main() {
@@ -24,11 +25,11 @@ func main() {
 	}
 
 	// Providers
-	postgresProvider, err := postgres.NewPostgresProvider()
+	gormProvider, err := gormprovider.NewPostgresProvider()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize postgres provider")
+		logrus.WithError(err).Fatal("Failed to initialize gorm provider")
 	}
-	rabbitmqProvider, err := rabbitmq.NewRabbitmqProvider()
+	rabbitmqProvider, err := rabbitmqprovider.NewRabbitmqProvider()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize rabbitmq provider")
 	}
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	// Repositories
-	userRepo := repository.NewUserRepository(postgresProvider)
+	userRepo := repository.NewUserRepository(gormProvider)
 
 	// Services
 	rabbitmqSvc := service.NewRabbitmqService(rabbitmqProvider)

@@ -6,11 +6,13 @@ import (
 	"challenge/internal/repository"
 	"challenge/internal/service"
 	"challenge/mocks"
+	"challenge/pkg/gormprovider"
 	"challenge/pkg/grpcclient"
 	"context"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -51,65 +53,65 @@ func assertUser(t *testing.T, req UserRequest, user entity.User) {
 }
 
 func TestUserService_CreateUser(t *testing.T) {
-	type Test struct {
-		TestName   string
-		Request    *userpb.RequestCreateUser
-		ExpectedId string
-		CreateUser bool
-		Validate   func(Test, *userpb.ResponseCreateUser, error)
-	}
-	tests := []Test{
-		{
-			TestName: "Success",
-			Request: &userpb.RequestCreateUser{
-				FirstName: "John",
-				LastName:  "Doe",
-				Nickname:  "johndoe",
-				Password:  "password",
-				Email:     "johndoe@email.com",
-				Country:   "Germany",
-			},
-			ExpectedId: ulid.Make().String(),
-			CreateUser: true,
-			Validate: func(test Test, res *userpb.ResponseCreateUser, err error) {
-				if assert.NoError(t, err) {
-					assert.Equal(t, test.ExpectedId, res.Id)
-				}
-			},
-		},
-		{
-			TestName: "Invalid argument",
-			Request:  &userpb.RequestCreateUser{},
-			Validate: func(test Test, res *userpb.ResponseCreateUser, err error) {
-				assertGrpcErrorCode(t, err, codes.InvalidArgument)
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.TestName, func(t *testing.T) {
-			createdUser := entity.User{Id: test.ExpectedId}
+	ctx := context.Background()
 
-			userRepo := mocks.NewUserRepository(t)
-			rabbitmqSvc := mocks.NewRabbitmqService(t)
-			if test.CreateUser {
-				userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
-				userRepo.On("CreateUser", mock.Anything, mock.Anything, test.Request.Password).
-					Return(func(_ context.Context, user entity.User, _ string) entity.User {
-						assertUser(t, test.Request, user)
-						return createdUser
-					}, nil)
-				rabbitmqSvc.On("PublishChanges", mock.Anything, createdUser, service.EntityType_USER, service.Action_CREATE).Return(nil)
-			}
-
-			userSvcCli, testEnd := testUserInit(t, userRepo, rabbitmqSvc)
-			defer testEnd()
-
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			res, err := userSvcCli.CreateUser(ctx, test.Request)
-			test.Validate(test, res, err)
-		})
+	validReq := &userpb.RequestCreateUser{
+		FirstName: "John",
+		LastName:  "Doe",
+		Nickname:  "johndoe",
+		Password:  "password",
+		Email:     "johndoe@email.com",
+		Country:   "Germany",
 	}
+
+	t.Run("Success", func(t *testing.T) {
+		userId := ulid.Make().String()
+
+		userRepo := mocks.NewUserRepository(t)
+		userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
+		userRepo.On("CreateUser", mock.Anything, mock.Anything, validReq.Password).
+			Return(func(_ context.Context, user entity.User, _ string) entity.User {
+				assertUser(t, validReq, user)
+				user.Id = userId
+				return user
+			}, nil)
+
+		rabbitmqSvc := mocks.NewRabbitmqService(t)
+		rabbitmqSvc.On("PublishChanges", mock.Anything, mock.Anything, service.EntityType_USER, service.Action_CREATE).
+			Return(func(_ context.Context, user any, _ service.EntityType, _ service.Action) error {
+				assert.Equal(t, userId, user.(entity.User).Id)
+				return nil
+			})
+
+		userSvcCli, testEnd := testUserInit(t, userRepo, rabbitmqSvc)
+		defer testEnd()
+
+		res, err := userSvcCli.CreateUser(ctx, validReq)
+		if assert.NoError(t, err) {
+			assert.Equal(t, userId, res.Id)
+		}
+	})
+
+	t.Run("Invalid argument - Missing params", func(t *testing.T) {
+		userSvcCli, testEnd := testUserInit(t, nil, nil)
+		defer testEnd()
+
+		_, err := userSvcCli.CreateUser(ctx, &userpb.RequestCreateUser{})
+		assertGrpcErrorCode(t, err, codes.InvalidArgument)
+	})
+
+	t.Run("FailedPrecondition - Duplicate key", func(t *testing.T) {
+		userRepo := mocks.NewUserRepository(t)
+		userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
+		userRepo.On("CreateUser", mock.Anything, mock.Anything, mock.Anything).
+			Return(entity.User{}, &pgconn.PgError{Code: gormprovider.UniqueViolationCode})
+
+		userSvcCli, testEnd := testUserInit(t, userRepo, nil)
+		defer testEnd()
+
+		_, err := userSvcCli.CreateUser(ctx, validReq)
+		assertGrpcErrorCode(t, err, codes.FailedPrecondition)
+	})
 }
 
 func TestUserService_UpdateUser(t *testing.T) {

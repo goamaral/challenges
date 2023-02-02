@@ -28,11 +28,9 @@ func initServer(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc se
 
 func assertGrpcErrorCode(t *testing.T, err error, c codes.Code) {
 	if assert.Error(t, err) {
-		grpcErr, ok := err.(interface {
-			GRPCStatus() *status.Status
-		})
+		sts, ok := status.FromError(err)
 		assert.True(t, ok, "Not grpc error")
-		assert.Equal(t, c, grpcErr.GRPCStatus().Code())
+		assert.Equal(t, c, sts.Code(), "wrong grpc status code")
 	}
 }
 

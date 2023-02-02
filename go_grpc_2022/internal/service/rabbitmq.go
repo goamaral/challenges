@@ -1,12 +1,13 @@
 package service
 
 import (
-	"challenge/pkg/providers/rabbitmq"
 	"context"
 	"encoding/json"
 	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"challenge/pkg/rabbitmqprovider"
 )
 
 type Action string
@@ -30,10 +31,10 @@ type RabbitmqService interface {
 }
 
 type rabbitmqService struct {
-	provider rabbitmq.RabbitmqProvider
+	provider rabbitmqprovider.RabbitmqProvider
 }
 
-func NewRabbitmqService(provider rabbitmq.RabbitmqProvider) RabbitmqService {
+func NewRabbitmqService(provider rabbitmqprovider.RabbitmqProvider) RabbitmqService {
 	return &rabbitmqService{provider: provider}
 }
 

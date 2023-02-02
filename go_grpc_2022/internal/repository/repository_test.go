@@ -1,14 +1,14 @@
 package repository_test
 
 import (
-	"challenge/pkg/providers/postgres"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
+
+	"challenge/pkg/gormprovider"
 )
 
 func testInit(t *testing.T) (*gorm.DB, func()) {
@@ -18,15 +18,5 @@ func testInit(t *testing.T) (*gorm.DB, func()) {
 		t.Fatal(err)
 	}
 
-	return postgres.NewTestPostgresProvider(t, string(databaseInitSqlBytes), true)
-}
-
-func assertUniqueViolationError(t *testing.T, err error) {
-	if assert.Error(t, err) {
-		pgErr, ok := err.(interface {
-			SQLState() string
-		})
-		assert.True(t, ok, "Not pg error")
-		assert.Equal(t, "23505", pgErr.SQLState()) // unique_violation
-	}
+	return gormprovider.NewTestPostgresProvider(t, string(databaseInitSqlBytes), true)
 }

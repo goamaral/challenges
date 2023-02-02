@@ -6,7 +6,12 @@ import (
 	"challenge/internal/protobuf"
 	"challenge/internal/repository"
 	"challenge/internal/service"
+	"challenge/pkg/gormprovider"
 	"context"
+
+	"github.com/jackc/pgconn"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const UserServiceName = "UserService"
@@ -50,6 +55,11 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 		return nil
 	})
 	if err != nil {
+		if gormprovider.IsUniqueViolationError(err) {
+			pgErr := err.(*pgconn.PgError)
+			return nil, status.Error(codes.FailedPrecondition, pgErr.Detail)
+		}
+
 		return nil, err
 	}
 
