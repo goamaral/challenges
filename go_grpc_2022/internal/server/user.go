@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgconn"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -60,7 +61,8 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 			return nil, status.Error(codes.FailedPrecondition, pgErr.Detail)
 		}
 
-		return nil, err
+		log.Error().Err(err).Msg("failed to create user")
+		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
 	return &userpb.ResponseCreateUser{Id: user.Id}, nil
@@ -90,7 +92,8 @@ func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUp
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("failed to update user")
+		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
 	return &userpb.ResponseUpdateUser{}, nil
@@ -114,7 +117,8 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("failed to delete user")
+		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
 	return &userpb.ResponseDeleteUser{}, nil
@@ -125,7 +129,8 @@ func (s userServiceServer) ListUsers(ctx context.Context, req *userpb.RequestLis
 		Country: req.Country,
 	})
 	if err != nil {
-		return nil, err
+		log.Error().Err(err).Msg("failed to list users")
+		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
 	return &userpb.ResponseListUsers{Users: protobuf.EntitiesToProtobuf(users, protobuf.UserToProtobuf)}, nil
