@@ -201,8 +201,13 @@ func TestUserService_ListUsers(t *testing.T) {
 
 	userRepo := mocks.NewUserRepository(t)
 	userRepo.On("ListUsers", mock.Anything, paginationToken, pageSize, mock.Anything).
-		Return(func(_ context.Context, _ string, _ uint, opts *repository.ListUsersOpts) []entity.User {
-			assert.Equal(t, country, opts.Country)
+		Return(func(_ context.Context, _ string, _ uint, opts ...gormprovider.Option) []entity.User {
+			if assert.Len(t, opts, 1) {
+				filterOpt, ok := opts[0].(repository.UserFilterOption)
+				if assert.True(t, ok, "not repository.UserFilterOption") && assert.NotNil(t, filterOpt.Country) {
+					assert.Equal(t, country, *filterOpt.Country)
+				}
+			}
 			return []entity.User{{Country: country}}
 		}, nil)
 

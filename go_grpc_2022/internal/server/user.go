@@ -58,10 +58,11 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 	if err != nil {
 		if gormprovider.IsUniqueViolationError(err) {
 			pgErr := err.(*pgconn.PgError)
+			log.Warn().Err(err).Msg("failed to list users")
 			return nil, status.Error(codes.FailedPrecondition, pgErr.Detail)
 		}
 
-		log.Error().Err(err).Msg("failed to create user")
+		log.Error().Stack().Err(err).Msg("failed to create user")
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
@@ -92,7 +93,7 @@ func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUp
 		return nil
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to update user")
+		log.Error().Stack().Err(err).Msg("failed to update user")
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
@@ -117,7 +118,7 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 		return nil
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to delete user")
+		log.Error().Stack().Err(err).Msg("failed to delete user")
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
 
@@ -125,11 +126,14 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 }
 
 func (s userServiceServer) ListUsers(ctx context.Context, req *userpb.RequestListUsers) (*userpb.ResponseListUsers, error) {
-	users, err := s.userRepo.ListUsers(ctx, req.PaginationToken, uint(req.PageSize), &repository.ListUsersOpts{
-		Country: req.Country,
-	})
+	var filterOption repository.UserFilterOption
+	if req.Country != "" {
+		filterOption.Country = &req.Country
+	}
+
+	users, err := s.userRepo.ListUsers(ctx, req.PaginationToken, uint(req.PageSize), filterOption)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to list users")
+		log.Error().Stack().Err(err).Msg("failed to list users")
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
 

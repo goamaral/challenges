@@ -258,9 +258,9 @@ func TestUserRepository_ListUsers(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
-			var opts *repository.ListUsersOpts
+			var filterOpt repository.UserFilterOption
 			if test.Country != "" {
-				opts = &repository.ListUsersOpts{Country: test.Country}
+				filterOpt = repository.UserFilterOption{Country: &test.Country}
 			}
 
 			db, testEnd := testInit(t)
@@ -270,7 +270,7 @@ func TestUserRepository_ListUsers(t *testing.T) {
 			addUser(t, db, entity.User{Id: secondUserId, Nickname: "nickname2", Email: "email2"}, "")
 
 			r := repository.NewUserRepository(db)
-			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, opts)
+			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, filterOpt)
 			test.Validate(test, users, err)
 		})
 	}
