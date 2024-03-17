@@ -1,0 +1,2 @@
+dependencies: docker compose up --scale app=0
+app: (cd cmd/app && go run main.go)

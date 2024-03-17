@@ -2,52 +2,33 @@ package repository
 
 import (
 	"challenge/internal/entity"
-	"challenge/pkg/gormprovider"
+	"challenge/pkg/gorm_ext"
 	"context"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/samber/mo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-type userRepository struct {
-	gormprovider.AbstractRepository
+type UserRepository struct {
+	gorm_ext.Repository
 }
 
-/* PUBLIC */
-type UserRepository interface {
-	gormprovider.AbstractRepository
-	CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error)
-	UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error)
-	DeleteUser(ctx context.Context, id string) error
-	ListUsers(ctx context.Context, paginationToken string, pageSize uint, opts ...gormprovider.Option) ([]entity.User, error)
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return UserRepository{Repository: gorm_ext.NewRepository(db)}
 }
 
-func NewUserRepository(db *gorm.DB) *userRepository {
-	return &userRepository{AbstractRepository: gormprovider.NewAbstractRepository(db)}
-}
-
-type UserFilterOption struct {
-	Country *string
-}
-
-func (opt UserFilterOption) Apply(qry *gorm.DB) *gorm.DB {
-	if opt.Country != nil {
-		qry = qry.Where("country", *opt.Country)
-	}
-
-	return qry
-}
-
-func (r userRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {
+func (r UserRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {
 	// Set password
-	err := user.SetPassword(password)
+	encryptedPassword, err := entity.EncryptPassword(password)
 	if err != nil {
 		return entity.User{}, err
 	}
+	user.EncryptedPassword = encryptedPassword
 
 	// Generate id
-	user.Id = ulid.Make().String()
+	user.Id = ulid.Make().String() // TODO: Use uuid v7
 
 	// Create user
 	err = r.NewQuery(ctx).Create(&user).Error
@@ -58,39 +39,36 @@ func (r userRepository) CreateUser(ctx context.Context, user entity.User, passwo
 	return user, nil
 }
 
-func (r userRepository) UpdateUser(ctx context.Context, id string, userUpdates entity.User, passwordUpdate string) (entity.User, error) {
-	if passwordUpdate != "" {
-		// Set password
-		err := userUpdates.SetPassword(passwordUpdate)
+type UserPatch struct {
+	FirstName mo.Option[string]
+	LastName  mo.Option[string]
+	Nickname  mo.Option[string]
+	Email     mo.Option[string]
+	Country   mo.Option[string]
+	Password  mo.Option[string]
+
+	EncryptedPassword mo.Option[[]byte] // Should not be used
+}
+
+func (r UserRepository) PatchUser(ctx context.Context, id string, patch UserPatch) error {
+	if p, ok := patch.Password.Get(); ok {
+		encryptedPassword, err := entity.EncryptPassword(p)
 		if err != nil {
-			return entity.User{}, err
+			return err
 		}
+		patch.EncryptedPassword = mo.Some(encryptedPassword)
 	}
 
 	// Update user
-	err := r.NewQuery(ctx).Clauses(clause.Returning{}).Where("id", id).Updates(&userUpdates).Error
-	if err != nil {
-		return entity.User{}, err
-	}
-
-	return userUpdates, nil
+	return r.NewQuery(ctx).Where("id", id).Updates(&patch).Error
 }
 
-func (r userRepository) DeleteUser(ctx context.Context, id string) error {
+func (r UserRepository) DeleteUser(ctx context.Context, id string) error {
 	return r.NewQuery(ctx).Where("id", id).Delete(&entity.User{}).Error
 }
 
-func (r userRepository) ListUsers(ctx context.Context, paginationToken string, pageSize uint, opts ...gormprovider.Option) ([]entity.User, error) {
+func (r UserRepository) ListUsers(ctx context.Context, paginationToken string, pageSize uint, cls ...clause.Expression) ([]entity.User, error) {
 	var users []entity.User
-
-	if pageSize == 0 {
-		pageSize = 10
-	}
-
-	qry := gormprovider.ApplyOptions(r.NewQuery(ctx), opts...)
-	err := qry.Where("id > ?", paginationToken).Limit(int(pageSize)).Find(&users).Error
-	if err != nil {
-		return nil, err
-	}
-	return users, nil
+	qry := r.NewQuery(ctx, cls...)
+	return users, qry.Where("id > ?", paginationToken).Limit(int(pageSize)).Find(&users).Error
 }

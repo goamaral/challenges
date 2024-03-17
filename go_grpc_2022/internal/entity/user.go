@@ -6,8 +6,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const bcryptCost = 11
-
 type User struct {
 	Id                string `gorm:"primaryKey"`
 	CreatedAt         time.Time
@@ -20,12 +18,8 @@ type User struct {
 	Country           string
 }
 
-func (u *User) SetPassword(password string) error {
-	encryptedPasswordBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
-	if err != nil {
-		return err
-	}
-	u.EncryptedPassword = encryptedPasswordBytes
+const bcryptCost = 11
 
-	return nil
+func EncryptPassword(password string) ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 }

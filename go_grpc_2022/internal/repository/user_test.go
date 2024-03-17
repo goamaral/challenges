@@ -3,30 +3,31 @@ package repository_test
 import (
 	"challenge/internal/entity"
 	"challenge/internal/repository"
-	"challenge/pkg/gormprovider"
+	"challenge/pkg/gorm_ext"
 	"context"
 	"testing"
 
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func addUser(t *testing.T, db *gorm.DB, user entity.User, password string) entity.User {
 	if password == "" {
-		user.SetPassword("password")
-	} else {
-		user.SetPassword(password)
+		password = "password"
 	}
+	encryptedPassword, err := entity.EncryptPassword(password)
+	require.NoError(t, err)
+	user.EncryptedPassword = encryptedPassword
+
 	if user.Id == "" {
 		user.Id = ulid.Make().String()
 	}
 
-	err := db.Create(&user).Error
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Create(&user).Error)
 
 	return user
 }
@@ -60,7 +61,7 @@ func TestUserRepository_CreateUser(t *testing.T) {
 			User:     entity.User{Nickname: nickname},
 			Validate: func(test Test, user entity.User, err error) {
 				if assert.Error(t, err) {
-					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
 				}
 			},
 		},
@@ -69,7 +70,7 @@ func TestUserRepository_CreateUser(t *testing.T) {
 			User:     entity.User{Email: email},
 			Validate: func(test Test, user entity.User, err error) {
 				if assert.Error(t, err) {
-					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
 				}
 			},
 		},
@@ -127,7 +128,7 @@ func TestUserRepository_UpdateUser(t *testing.T) {
 			UserUpdates: entity.User{Nickname: nickname},
 			Validate: func(test Test, user entity.User, err error) {
 				if assert.Error(t, err) {
-					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
 				}
 			},
 		},
@@ -136,7 +137,7 @@ func TestUserRepository_UpdateUser(t *testing.T) {
 			UserUpdates: entity.User{Email: email},
 			Validate: func(test Test, user entity.User, err error) {
 				if assert.Error(t, err) {
-					assert.Truef(t, gormprovider.IsUniqueViolationError(err), "not pg unique_violation: %s", err.Error())
+					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
 				}
 			},
 		},
@@ -258,19 +259,18 @@ func TestUserRepository_ListUsers(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
-			var filterOpt repository.UserFilterOption
-			if test.Country != "" {
-				filterOpt = repository.UserFilterOption{Country: &test.Country}
-			}
-
 			db, testEnd := testInit(t)
 			defer testEnd()
 
 			addUser(t, db, entity.User{Id: firstUserId, Nickname: "nickname1", Email: "email1", Country: country}, "")
 			addUser(t, db, entity.User{Id: secondUserId, Nickname: "nickname2", Email: "email2"}, "")
 
+			var conds []clause.Expression
+			if test.Country != "" {
+				conds = append(conds, clause.Eq{Column: clause.Column{Name: "country"}, Value: test.Country})
+			}
 			r := repository.NewUserRepository(db)
-			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, filterOpt)
+			users, err := r.ListUsers(context.Background(), test.PaginationToken, test.PageSize, conds...)
 			test.Validate(test, users, err)
 		})
 	}

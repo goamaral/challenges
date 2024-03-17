@@ -6,49 +6,43 @@ import (
 	"challenge/internal/protobuf"
 	"challenge/internal/repository"
 	"challenge/internal/service"
-	"challenge/pkg/gormprovider"
 	"context"
 
-	"github.com/jackc/pgconn"
-	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"gorm.io/gorm/clause"
 )
 
 const UserServiceName = "UserService"
 
-type userServiceServer struct {
-	userpb.UnimplementedUserServiceServer
-	userRepo    repository.UserRepository
-	rabbitmqSvc service.RabbitmqService
-}
-
 type UserServiceServer struct {
-	userpb.UserServiceServer
+	userpb.UnimplementedUserServiceServer
+	userRepo  repository.UserRepository
+	rabbitSvc service.RabbitmqService
 }
 
-func NewUserServiceServer(userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) *userServiceServer {
-	return &userServiceServer{userRepo: userRepo, rabbitmqSvc: rabbitmqSvc}
+func NewUserServiceServer(userRepo repository.UserRepository, rabbitSvc service.RabbitmqService) UserServiceServer {
+	return UserServiceServer{userRepo: userRepo, rabbitSvc: rabbitSvc}
 }
 
-func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCreateUser) (*userpb.ResponseCreateUser, error) {
+func (s UserServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCreateUser) (*userpb.ResponseCreateUser, error) {
 	var user entity.User
 	var err error
-	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		// Create user
-		user, err = s.userRepo.CreateUser(txCtx, entity.User{
-			FirstName: req.FirstName,
-			LastName:  req.LastName,
-			Nickname:  req.Nickname,
-			Email:     req.Email,
-			Country:   req.Country,
-		}, req.Password)
+	err = s.userRepo.NewTransaction(ctx, func(ctx context.Context) error {
+		user, err = s.userRepo.CreateUser(
+			ctx,
+			entity.User{
+				FirstName: req.FirstName,
+				LastName:  req.LastName,
+				Nickname:  req.Nickname,
+				Email:     req.Email,
+				Country:   req.Country,
+			},
+			req.Password,
+		)
 		if err != nil {
 			return err
 		}
 
-		// Publish user changes
-		err = s.rabbitmqSvc.PublishChanges(txCtx, user, service.EntityType_USER, service.Action_CREATE)
+		err = s.rabbitSvc.Publish(ctx, &userpb.Event_UserCreated{User: protobuf.UserToProtobuf(user)})
 		if err != nil {
 			return err
 		}
@@ -56,36 +50,30 @@ func (s userServiceServer) CreateUser(ctx context.Context, req *userpb.RequestCr
 		return nil
 	})
 	if err != nil {
-		if gormprovider.IsUniqueViolationError(err) {
-			pgErr := err.(*pgconn.PgError)
-			log.Warn().Err(err).Msg("failed to list users")
-			return nil, status.Error(codes.FailedPrecondition, pgErr.Detail)
-		}
+		// TODO: Check what this unique violation means
+		// if errors.Is(err, gorm_ext.ErrUniqueViolation) {
+		// 	log.Warn().Err(err).Msg("failed to list users")
+		// 	return nil, status.Error(codes.FailedPrecondition, "TODO")
+		// }
 
-		log.Error().Stack().Err(err).Msg("failed to create user")
-		return nil, status.Error(codes.Internal, "Internal error")
+		return nil, err
 	}
 
 	return &userpb.ResponseCreateUser{Id: user.Id}, nil
 }
 
-func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUpdateUser) (*userpb.ResponseUpdateUser, error) {
-	var user entity.User
-	var err error
-	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		user, err = s.userRepo.UpdateUser(ctx, req.Id, entity.User{
-			FirstName: req.FirstName,
-			LastName:  req.LastName,
-			Nickname:  req.Nickname,
-			Email:     req.Email,
-			Country:   req.Country,
-		}, req.Password)
+func (s UserServiceServer) PatchUser(ctx context.Context, req *userpb.RequestPatchUser) (*userpb.ResponsePatchUser, error) {
+	err := s.userRepo.NewTransaction(ctx, func(txCtx context.Context) error {
+		err := s.userRepo.PatchUser(ctx, req.Id, protobuf.UserPatchFromProtobuf(req.Patch))
 		if err != nil {
 			return err
 		}
 
-		// Publish user changes
-		err = s.rabbitmqSvc.PublishChanges(txCtx, user, service.EntityType_USER, service.Action_UPDATE)
+		if req.Patch.Password != nil {
+			req.Patch.Password.Value = "redacted"
+		}
+
+		err = s.rabbitSvc.Publish(txCtx, &userpb.Event_UserPatched{Patch: req.Patch})
 		if err != nil {
 			return err
 		}
@@ -93,24 +81,20 @@ func (s userServiceServer) UpdateUser(ctx context.Context, req *userpb.RequestUp
 		return nil
 	})
 	if err != nil {
-		log.Error().Stack().Err(err).Msg("failed to update user")
-		return nil, status.Error(codes.Internal, "Internal error")
+		return nil, err
 	}
 
-	return &userpb.ResponseUpdateUser{}, nil
+	return &userpb.ResponsePatchUser{}, nil
 }
 
-func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDeleteUser) (*userpb.ResponseDeleteUser, error) {
-	var err error
-	err = s.userRepo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		// Delete user
+func (s UserServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDeleteUser) (*userpb.ResponseDeleteUser, error) {
+	err := s.userRepo.NewTransaction(ctx, func(ctx context.Context) error {
 		err := s.userRepo.DeleteUser(ctx, req.Id)
 		if err != nil {
 			return err
 		}
 
-		// Publish user changes
-		err = s.rabbitmqSvc.PublishChanges(txCtx, req.Id, service.EntityType_USER, service.Action_DELETE)
+		err = s.rabbitSvc.Publish(ctx, &userpb.Event_UserDeleted{Id: req.Id})
 		if err != nil {
 			return err
 		}
@@ -118,23 +102,22 @@ func (s userServiceServer) DeleteUser(ctx context.Context, req *userpb.RequestDe
 		return nil
 	})
 	if err != nil {
-		log.Error().Stack().Err(err).Msg("failed to delete user")
-		return nil, status.Error(codes.Internal, "Internal error")
+		return nil, err
 	}
 
 	return &userpb.ResponseDeleteUser{}, nil
 }
 
-func (s userServiceServer) ListUsers(ctx context.Context, req *userpb.RequestListUsers) (*userpb.ResponseListUsers, error) {
-	var filterOption repository.UserFilterOption
+func (s UserServiceServer) ListUsers(ctx context.Context, req *userpb.RequestListUsers) (*userpb.ResponseListUsers, error) {
+	var conds []clause.Expression
 	if req.Country != "" {
-		filterOption.Country = &req.Country
+		conds = append(conds, clause.Eq{Column: "country", Value: req.Country})
 	}
 
-	users, err := s.userRepo.ListUsers(ctx, req.PaginationToken, uint(req.PageSize), filterOption)
+	// TODO: Validate request
+	users, err := s.userRepo.ListUsers(ctx, req.PaginationToken, uint(req.PageSize), conds...)
 	if err != nil {
-		log.Error().Stack().Err(err).Msg("failed to list users")
-		return nil, status.Error(codes.Internal, "Internal error")
+		return nil, err
 	}
 
 	return &userpb.ResponseListUsers{Users: protobuf.EntitiesToProtobuf(users, protobuf.UserToProtobuf)}, nil

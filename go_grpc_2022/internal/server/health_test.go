@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"challenge/internal/repository"
 	"challenge/internal/server"
 	"challenge/pkg/grpcclient"
 	"context"
@@ -11,7 +12,7 @@ import (
 )
 
 func testHealthInit(t *testing.T) (grpcclient.HealthServiceClient, *server.Server, func()) {
-	lis, grpcServer := initServer(t, nil, nil)
+	lis, grpcServer := initServer(t, repository.UserRepository{}, nil)
 	go grpcServer.Serve(lis)
 
 	testEnd := func() {
@@ -68,7 +69,7 @@ func TestHealthService_Check(t *testing.T) {
 }
 
 func TestHealthService_Watch(t *testing.T) {
-	lis, grpcServer := initServer(t, nil, nil)
+	lis, grpcServer := initServer(t, repository.UserRepository{}, nil)
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 

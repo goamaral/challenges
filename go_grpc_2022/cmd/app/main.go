@@ -10,42 +10,36 @@ import (
 	"challenge/internal/repository"
 	"challenge/internal/server"
 	"challenge/internal/service"
-	"challenge/pkg/env"
-	"challenge/pkg/gormprovider"
-	"challenge/pkg/rabbitmqprovider"
+	"challenge/pkg/gorm_ext"
+	"challenge/pkg/rabbitmq_ext"
 )
 
 func main() {
 	// Load env file
-	if env.GetOrDefault("ENV", "development") == "development" {
-		err := godotenv.Load()
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to load .env")
-		}
-	}
+	godotenv.Load()
 
 	// Providers
-	gormProvider, err := gormprovider.NewPostgresProvider()
+	db, err := gorm_ext.ConnectToDatabase(
+		gorm_ext.NewPostgresDialector(gorm_ext.NewPostgresDSN()),
+		false,
+	)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize gorm provider")
+		logrus.WithError(err).Fatal("Failed to connect to db")
 	}
-	rabbitmqProvider, err := rabbitmqprovider.NewRabbitmqProvider()
+	rabbitChan, err := rabbitmq_ext.NewChannel()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize rabbitmq provider")
+		logrus.WithError(err).Fatal("Failed to initialize rabbitmq channel")
 	}
-	defer rabbitmqProvider.Close()
+	defer rabbitChan.Close()
 
-	// Declare rabbitmq exchange
-	err = rabbitmqProvider.ExchangeDeclare(service.RabbitmqChangesTopic, "topic", true, false, false, false, nil)
+	// Services
+	rabbitmqSvc, err := service.NewRabbitmqService(rabbitChan)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to declare rabbitmq changes exchange")
+		logrus.WithError(err).Fatal("Failed to initialize to rabbitmq service")
 	}
 
 	// Repositories
-	userRepo := repository.NewUserRepository(gormProvider)
-
-	// Services
-	rabbitmqSvc := service.NewRabbitmqService(rabbitmqProvider)
+	userRepo := repository.NewUserRepository(db)
 
 	// Server
 	grpcServer, err := server.NewServer(userRepo, rabbitmqSvc)

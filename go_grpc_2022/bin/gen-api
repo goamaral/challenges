@@ -1,0 +1,3 @@
+#!/bin/bash
+DIR=${0%/*}
+docker run --rm -v $DIR/../api:/defs namely/protoc-all -f user.proto -l go -o . --lint --go-proto-validator

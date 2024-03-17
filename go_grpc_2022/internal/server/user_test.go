@@ -6,7 +6,7 @@ import (
 	"challenge/internal/repository"
 	"challenge/internal/service"
 	"challenge/mocks"
-	"challenge/pkg/gormprovider"
+	"challenge/pkg/gorm_ext"
 	"challenge/pkg/grpcclient"
 	"context"
 	"testing"
@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc/codes"
+	"gorm.io/gorm/clause"
 )
 
 func testUserInit(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) (grpcclient.UserServiceClient, func()) {
@@ -68,7 +69,6 @@ func TestUserService_CreateUser(t *testing.T) {
 		userId := ulid.Make().String()
 
 		userRepo := mocks.NewUserRepository(t)
-		userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
 		userRepo.On("CreateUser", mock.Anything, mock.Anything, validReq.Password).
 			Return(func(_ context.Context, user entity.User, _ string) entity.User {
 				assertUser(t, validReq, user)
@@ -93,7 +93,7 @@ func TestUserService_CreateUser(t *testing.T) {
 	})
 
 	t.Run("Invalid argument - Missing params", func(t *testing.T) {
-		userSvcCli, testEnd := testUserInit(t, nil, nil)
+		userSvcCli, testEnd := testUserInit(t, repository.UserRepository{}, nil)
 		defer testEnd()
 
 		_, err := userSvcCli.CreateUser(ctx, &userpb.RequestCreateUser{})
@@ -102,9 +102,8 @@ func TestUserService_CreateUser(t *testing.T) {
 
 	t.Run("FailedPrecondition - Duplicate key", func(t *testing.T) {
 		userRepo := mocks.NewUserRepository(t)
-		userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
 		userRepo.On("CreateUser", mock.Anything, mock.Anything, mock.Anything).
-			Return(entity.User{}, &pgconn.PgError{Code: gormprovider.UniqueViolationCode})
+			Return(entity.User{}, &pgconn.PgError{Code: string(gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION)})
 
 		userSvcCli, testEnd := testUserInit(t, userRepo, nil)
 		defer testEnd()
@@ -129,7 +128,6 @@ func TestUserService_UpdateUser(t *testing.T) {
 
 	userRepo := mocks.NewUserRepository(t)
 	rabbitmqSvc := mocks.NewRabbitmqService(t)
-	userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
 	userRepo.On("UpdateUser", mock.Anything, req.Id, mock.Anything, req.Password).
 		Return(func(_ context.Context, _ string, user entity.User, _ string) entity.User {
 			assertUser(t, req, user)
@@ -177,7 +175,6 @@ func TestUserService_DeleteUser(t *testing.T) {
 			userRepo := mocks.NewUserRepository(t)
 			rabbitmqSvc := mocks.NewRabbitmqService(t)
 			if test.DeleteUser {
-				userRepo.Mock = defineRunInTransactionStub(userRepo.Mock)
 				userRepo.On("DeleteUser", mock.Anything, test.Request.Id).Return(nil)
 				rabbitmqSvc.On("PublishChanges", mock.Anything, test.Request.Id, service.EntityType_USER, service.Action_DELETE).Return(nil)
 			}
@@ -201,8 +198,8 @@ func TestUserService_ListUsers(t *testing.T) {
 
 	userRepo := mocks.NewUserRepository(t)
 	userRepo.On("ListUsers", mock.Anything, paginationToken, pageSize, mock.Anything).
-		Return(func(_ context.Context, _ string, _ uint, opts ...gormprovider.Option) []entity.User {
-			if assert.Len(t, opts, 1) {
+		Return(func(_ context.Context, _ string, _ uint, conds ...clause.Expression) []entity.User {
+			if assert.Len(t, conds, 1) {
 				filterOpt, ok := opts[0].(repository.UserFilterOption)
 				if assert.True(t, ok, "not repository.UserFilterOption") && assert.NotNil(t, filterOpt.Country) {
 					assert.Equal(t, country, *filterOpt.Country)
