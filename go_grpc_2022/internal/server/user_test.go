@@ -7,7 +7,7 @@ import (
 	"challenge/internal/service"
 	"challenge/mocks"
 	"challenge/pkg/gorm_ext"
-	"challenge/pkg/grpcclient"
+	"challenge/pkg/grpc_client"
 	"context"
 	"testing"
 	"time"
@@ -20,7 +20,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func testUserInit(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) (grpcclient.UserServiceClient, func()) {
+func testUserInit(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc service.RabbitmqService) (grpc_client.UserServiceClient, func()) {
 	lis, grpcServer := initServer(t, userRepo, rabbitmqSvc)
 	go grpcServer.Serve(lis)
 
@@ -28,7 +28,7 @@ func testUserInit(t *testing.T, userRepo repository.UserRepository, rabbitmqSvc 
 		grpcServer.Stop()
 	}
 
-	userSvcCli, err := grpcclient.NewUserServiceClient(lis.Addr().String())
+	userSvcCli, err := grpc_client.NewUserServiceClient(lis.Addr().String())
 	if err != nil {
 		testEnd()
 		t.Fatal(err)

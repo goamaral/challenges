@@ -2,91 +2,72 @@ package repository_test
 
 import (
 	"challenge/internal/entity"
+	"challenge/internal/helper"
 	"challenge/internal/repository"
 	"challenge/pkg/gorm_ext"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/samber/do"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-func addUser(t *testing.T, db *gorm.DB, user entity.User, password string) entity.User {
-	if password == "" {
-		password = "password"
-	}
-	encryptedPassword, err := entity.EncryptPassword(password)
-	require.NoError(t, err)
-	user.EncryptedPassword = encryptedPassword
-
-	if user.Id == "" {
-		user.Id = ulid.Make().String()
-	}
-
-	require.NoError(t, db.Create(&user).Error)
-
-	return user
-}
 
 func TestUserRepository_CreateUser(t *testing.T) {
 	nickname := "nickname"
 	email := "user@email.com"
 
 	type Test struct {
-		TestName string
 		User     entity.User
 		Password string
 		Validate func(Test, entity.User, error)
 	}
-	tests := []Test{
-		{
-			TestName: "Success",
-			User:     entity.User{},
-			Password: "password",
-			Validate: func(test Test, user entity.User, err error) {
-				if assert.NoError(t, err) {
-					assert.NotZero(t, user.Id)
-					assert.NotZero(t, user.CreatedAt)
-					assert.NotZero(t, user.UpdatedAt)
-					assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(test.Password)))
-				}
-			},
-		},
-		{
-			TestName: "Failure - Nickname not unique",
-			User:     entity.User{Nickname: nickname},
-			Validate: func(test Test, user entity.User, err error) {
-				if assert.Error(t, err) {
-					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
-				}
-			},
-		},
-		{
-			TestName: "Failure - Email not unique",
-			User:     entity.User{Email: email},
-			Validate: func(test Test, user entity.User, err error) {
-				if assert.Error(t, err) {
-					assert.Truef(t, gorm_ext.IsPostgresError(err, gorm_ext.PostgresErrorCode_UNIQUE_VIOLATION), "not pg unique_violation: %s", err.Error())
-				}
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.TestName, func(t *testing.T) {
-			db, testEnd := testInit(t)
-			defer testEnd()
 
-			addUser(t, db, entity.User{Nickname: nickname, Email: email}, "")
+	runTest := func(testName string, test Test) {
+		helper.RunTest(t, testName, func(tester helper.Tester) {
+			tester.AddUser(entity.User{Nickname: nickname, Email: email}, "")
+			r, err := do.Invoke[repository.UserRepository](tester.I)
+			require.NoError(t, err)
 
-			r := repository.NewUserRepository(db)
 			user, err := r.CreateUser(context.Background(), test.User, test.Password)
 			test.Validate(test, user, err)
 		})
 	}
+
+	runTest("Success", Test{
+		User:     entity.User{},
+		Password: "password",
+		Validate: func(test Test, user entity.User, err error) {
+			if assert.NoError(t, err) {
+				assert.NotZero(t, user.Id)
+				assert.NotZero(t, user.CreatedAt)
+				assert.NotZero(t, user.UpdatedAt)
+				assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(user.EncryptedPassword), []byte(test.Password)))
+			}
+		},
+	})
+
+	runTest("Failure/NicknameNotUnique", Test{
+		User: entity.User{Nickname: nickname},
+		Validate: func(test Test, user entity.User, err error) {
+			if assert.Error(t, err) {
+				assert.Truef(t, errors.Is(gorm_ext.ExtractError(err), gorm_ext.ErrUniqueViolation), "not pg unique_violation: %s", err.Error())
+			}
+		},
+	})
+
+	runTest("Failure/EmailNotUnique", Test{
+		User: entity.User{Email: email},
+		Validate: func(test Test, user entity.User, err error) {
+			if assert.Error(t, err) {
+				assert.Truef(t, errors.Is(gorm_ext.ExtractError(err), gorm_ext.ErrUniqueViolation), "not pg unique_violation: %s", err.Error())
+			}
+		},
+	})
 }
 
 func TestUserRepository_UpdateUser(t *testing.T) {

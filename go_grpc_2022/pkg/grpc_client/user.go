@@ -1,4 +1,4 @@
-package grpcclient
+package grpc_client
 
 import (
 	"challenge/api/gen/userpb"

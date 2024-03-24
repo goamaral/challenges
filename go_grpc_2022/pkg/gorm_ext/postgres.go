@@ -50,7 +50,7 @@ func NewTestPostgresDSN(t *testing.T) PostgresDSN {
 	host, err := ctn.Host(ctx)
 	require.NoError(t, err)
 
-	port, err := ctn.MappedPort(ctx, "5432/tcp")
+	port, err := ctn.MappedPort(ctx, "5432/tcp") // TODO: Map to random port
 	require.NoError(t, err)
 
 	return PostgresDSN{

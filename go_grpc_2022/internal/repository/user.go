@@ -6,8 +6,8 @@ import (
 	"context"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/samber/do"
 	"github.com/samber/mo"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -15,8 +15,12 @@ type UserRepository struct {
 	gorm_ext.Repository
 }
 
-func NewUserRepository(db *gorm.DB) UserRepository {
-	return UserRepository{Repository: gorm_ext.NewRepository(db)}
+func NewUserRepository(i *do.Injector) (UserRepository, error) {
+	db, err := do.Invoke[*gorm_ext.DB](i)
+	if err != nil {
+		return UserRepository{}, err
+	}
+	return UserRepository{Repository: gorm_ext.NewRepository(db.DB)}, nil
 }
 
 func (r UserRepository) CreateUser(ctx context.Context, user entity.User, password string) (entity.User, error) {

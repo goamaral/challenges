@@ -35,10 +35,10 @@ func ConnectToDatabase(dialector gorm.Dialector, silentLogger bool) (db *gorm.DB
 	return db, err
 }
 
-func DisconnectFromDatabase(db *gorm.DB) {
+func DisconnectFromDatabase(db *gorm.DB) error {
 	rawDb, err := db.DB()
 	if err != nil {
-		return
+		return err
 	}
-	rawDb.Close()
+	return rawDb.Close()
 }

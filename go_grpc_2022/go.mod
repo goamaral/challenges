@@ -12,6 +12,7 @@ require (
 	github.com/mwitkow/go-proto-validators v0.3.2
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rabbitmq/amqp091-go v1.5.0
+	github.com/samber/do v1.6.0
 	github.com/samber/mo v1.11.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0

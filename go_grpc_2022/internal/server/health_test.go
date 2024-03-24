@@ -3,7 +3,7 @@ package server_test
 import (
 	"challenge/internal/repository"
 	"challenge/internal/server"
-	"challenge/pkg/grpcclient"
+	"challenge/pkg/grpc_client"
 	"context"
 	"testing"
 
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
-func testHealthInit(t *testing.T) (grpcclient.HealthServiceClient, *server.Server, func()) {
+func testHealthInit(t *testing.T) (grpc_client.HealthServiceClient, *server.Server, func()) {
 	lis, grpcServer := initServer(t, repository.UserRepository{}, nil)
 	go grpcServer.Serve(lis)
 
@@ -19,7 +19,7 @@ func testHealthInit(t *testing.T) (grpcclient.HealthServiceClient, *server.Serve
 		grpcServer.Stop()
 	}
 
-	healthSvcCli, err := grpcclient.NewHealthServiceClient(lis.Addr().String())
+	healthSvcCli, err := grpc_client.NewHealthServiceClient(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestHealthService_Check(t *testing.T) {
 	})
 
 	t.Run("Server down", func(t *testing.T) {
-		downHealthSvcCli, err := grpcclient.NewHealthServiceClient("")
+		downHealthSvcCli, err := grpc_client.NewHealthServiceClient("")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +74,7 @@ func TestHealthService_Watch(t *testing.T) {
 	go grpcServer.Serve(lis)
 
 	// Initialize health client
-	healthSvcCli, err := grpcclient.NewHealthServiceClient(lis.Addr().String())
+	healthSvcCli, err := grpc_client.NewHealthServiceClient(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestHealthService_Watch(t *testing.T) {
 	}
 
 	// Server down
-	downHealthSvcCli, err := grpcclient.NewHealthServiceClient("")
+	downHealthSvcCli, err := grpc_client.NewHealthServiceClient("")
 	if err != nil {
 		t.Fatal(err)
 	}
